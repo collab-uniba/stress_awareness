@@ -210,7 +210,7 @@ def getSVMFeatures(key):
         return
 
 
-def classify(classifierList):
+def classify(classifierList, input):
     '''
     This function wraps other functions in order to load, classify, and return the label for each 5 second epoch of Q sensor data.
 
@@ -225,7 +225,8 @@ def classify(classifierList):
     fiveSec = 8 * 5
 
     # Load data
-    data, _ = getInputLoadFile(sys.argv[1])
+
+    data, _ = getInputLoadFile(input)
 
     # Get pickle List and featureNames list
     featureNameList = [[]] * len(classifierList)
@@ -246,7 +247,6 @@ def classify(classifierList):
         start = h * oneHour
         end = min((h + 1) * oneHour, rows)
         cur_data = data[start:end]
-
         features = createFeatureDF(cur_data)
 
         for i in range(len(classifierList)):
@@ -335,102 +335,33 @@ def plotData(data, labels, classifierList, filteredPlot=0, secondsPlot=0):
     return
 
 
-if __name__ == "__main__":
-
-    #numClassifiers = int(get_user_input('Would you like 1 classifier (Binary or Multiclass) or both (enter 1 or 2): '))
-
-    numClassifiers = 1
-    classifierList = ['Binary']
-    # Create list of classifiers
-    # if numClassifiers == 1:
-    #     temp_clf = int(get_user_input("Select a classifier:\n1: Binary\n2: Multiclass\n:"))
-    #     while temp_clf != 1 and temp_clf != 2:
-    #         temp_clf = get_user_input(
-    #             "Something went wrong. Enter the number 1 or 2.\n Select a classifier:\n1: Binary\n2: Multiclass):")
-    #     if temp_clf == 1:
-    #         print('Binary Classifier selected')
-    #         classifierList = ['Binary']
-    #     elif temp_clf == 2:
-    #         print('Multiclass Classifier selected')
-    #         classifierList = ['Multiclass']
-    # else:
-    #     classifierList = ['Binary', 'Multiclass']
-
-    # Classify the data
-    labels, data = classify(classifierList)
-
-    # Plotting the data
-    # plotDataInput = get_user_input('Do you want to plot the labels? (y/n): ')
-    #
-    # if plotDataInput == 'y':
-    #     # Include filter plot?
-    #     filteredPlot = get_user_input('Would you like to include filtered data in your plot? (y/n): ')
-    #     if filteredPlot == 'y':
-    #         filteredPlot = 1
-    #     else:
-    #         filteredPlot = 0
-    #
-    #     # X axis in seconds?
-    #     secondsPlot = get_user_input('Would you like the x-axis to be in seconds or minutes? (sec/min): ')
-    #     if secondsPlot == 'sec':
-    #         secondsPlot = 1
-    #     else:
-    #         secondsPlot = 0
-    #
-    #     # Plot Data
-    #     plotData(data, labels, classifierList, filteredPlot, secondsPlot)
-
-        # print(
-        #     "Remember! Red is for epochs with artifact, grey is for epochs that are questionable, and no shading is for clean epochs")
-
-    # Saving the data
-
-
-    outputPath = './'
-    outputLabelFilename = sys.argv[2]
-
-    #saveDataInput = get_user_input('Do you want to save the labels? (y/n): ')
-    fullOutputPath = os.path.join(outputPath, outputLabelFilename)
-    if fullOutputPath[-4:] != '.csv':
-        fullOutputPath = fullOutputPath + '.csv'
-
-    # if saveDataInput == 'y':
-    #     outputPath = get_user_input('Output directory: ')
-    #     outputLabelFilename = get_user_input('Output filename: ')
-    #
-    #     # Save labels
-    #     fullOutputPath = os.path.join(outputPath, outputLabelFilename)
-    #     if fullOutputPath[-4:] != '.csv':
-    #         fullOutputPath = fullOutputPath + '.csv'
-
-    featureLabels = pd.DataFrame(labels, index=pd.date_range(start=data.index[0], periods=len(labels), freq='5s'),
-                                 columns=classifierList)
-
-    featureLabels.reset_index(inplace=True)
-    featureLabels.rename(columns={'index': 'StartTime'}, inplace=True)
-    featureLabels['EndTime'] = featureLabels['StartTime'] + datetime.timedelta(seconds=5)
-    featureLabels.index.name = 'EpochNum'
-
-    cols = ['StartTime', 'EndTime']
-    cols.extend(classifierList)
-
-    featureLabels = featureLabels[cols]
-    featureLabels.rename(columns={'Binary': 'BinaryLabels', 'Multiclass': 'MulticlassLabels'},
-                         inplace=True)
-
-    featureLabels.to_csv(fullOutputPath)
-    data.to_csv(sys.argv[3])
-
-    #     print("Labels saved to " + fullOutputPath)
-    #     print(
-    #         "Remember! The first column is timestamps and the second column is the labels (-1 for artifact, 0 for questionable, 1 for clean)")
-    #
-    # print('--------------------------------')
-    # print("Please also cite this project:")
-    # print(
-    #     "Taylor, S., Jaques, N., Chen, W., Fedor, S., Sano, A., & Picard, R. Automatic identification of artifacts in electrodermal activity data. In Engineering in Medicine and Biology Conference. 2015")
-    # print('--------------------------------')
-
+# if __name__ == "__main__":
+#
+#     numClassifiers = 1
+#     classifierList = ['Binary']
+#     labels, data = classify(classifierList)
+#     fullOutputPath = sys.argv[2]
+#
+#     if fullOutputPath[-4:] != '.csv':
+#         fullOutputPath = fullOutputPath + '.csv'
+#
+#     featureLabels = pd.DataFrame(labels, index=pd.date_range(start=data.index[0], periods=len(labels), freq='5s'),
+#                                  columns=classifierList)
+#
+#     featureLabels.reset_index(inplace=True)
+#     featureLabels.rename(columns={'index': 'StartTime'}, inplace=True)
+#     featureLabels['EndTime'] = featureLabels['StartTime'] + datetime.timedelta(seconds=5)
+#     featureLabels.index.name = 'EpochNum'
+#
+#     cols = ['StartTime', 'EndTime']
+#     cols.extend(classifierList)
+#
+#     featureLabels = featureLabels[cols]
+#     featureLabels.rename(columns={'Binary': 'BinaryLabels', 'Multiclass': 'MulticlassLabels'},
+#                          inplace=True)
+#
+#     featureLabels.to_csv(fullOutputPath)
+#     data.to_csv(sys.argv[3])
 
 
 

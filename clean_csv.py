@@ -1,9 +1,8 @@
 import os
 import pandas as pd
 import datetime
-import shutil
-directory = r'C:\Users\user\Desktop\FieldStudy'
-import csv
+
+directory = r'path/to/self-report/files'
 
 def get_datetime_filename(column):
     human_timestamp = []
@@ -28,9 +27,7 @@ def uniform_csv(filename):
 
 subfolders = [f.path for f in os.scandir(directory) if f.is_dir()]
 for files in subfolders:
-    print(files)
     for f in os.scandir(files):
-        print(f)
         if f.is_dir():
             if os.path.exists(os.path.join(f, "merged.csv")):
                 os.remove(os.path.join(f, 'merged.csv'))
@@ -38,12 +35,9 @@ for files in subfolders:
             all_files = []
             for popup in os.listdir(f):
                 if popup.endswith('.csv'):
-                    #uniform_csv(os.path.join(f, popup))
                     path_participant = os.path.join(f, popup)
                     all_files.append(os.path.join(f, popup))
                     print(all_files)
-                    #df_from_each_file = (pd.read_csv(f, sep=',', names = ['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity', 'status_popup','notes']) for f in all_files)
-                    #print(df_from_each_file)
                     df_merged = pd.concat([pd.read_csv(f, sep=',', names = ['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity', 'status_popup','notes']) for f in all_files])
                     df_merged = df_merged.drop_duplicates()
                     print(df_merged)

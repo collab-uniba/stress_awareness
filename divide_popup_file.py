@@ -3,7 +3,7 @@ import pandas as pd
 import datetime
 import shutil
 
-directory = r'C:\Users\user\Desktop\FieldStudy'
+directory = r'path/to/self-report/files'
 
 
 def get_datetime_filename(column):
@@ -46,7 +46,7 @@ for files in subfolders:
                                 final_filename = ('popup//' + str(row['timestamp'].date()) + '.csv')
                                 df = pd.DataFrame(d, columns=['timestamp', 'activity', 'valence', 'arousal', 'dominance',
                                                                'productivity', 'status_popup', 'notes'])
-                                print(df)
+
 
                                 if not os.path.exists(os.path.join(f, 'popup')):
                                     #.rmtree(os.path.join(f, 'popup'))

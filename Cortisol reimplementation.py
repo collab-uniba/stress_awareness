@@ -1,10 +1,18 @@
-import pandas as pd
-import numpy as np
 import os
 import scipy.signal as scisig
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
+
+from bokeh.io import output_file
+
 SAMPLE_RATE = 8
+import matplotlib.patches as mpatches
+import panel as pn
+import pandas as pd
+import numpy as np
+from bokeh.plotting import figure, show
+from bokeh.models import ColumnDataSource, Span, Label, LinearAxis, Title, Circle, HoverTool, CustomJS
+from bokeh.layouts import column
 
 def get_seconds_and_microseconds(pandas_time):
     return pandas_time.seconds + pandas_time.microseconds * 1e-6
@@ -148,113 +156,117 @@ def detect_fast_edges(data):
     return data
 
 
-
-# def moving_average_filter(data):
-#
-#     y = data['filtered_eda'].values
-#     y = np.convolve(y, np.ones(3), 'valid') / 3
-#     print(len(y))
-#     print(len(data['filtered_eda'].values))
-    #data['filtered_eda'] = y
-
+def calc_y(a,c ):
+    b = []
+    for _ in range(0, 6):
+        y = (a * c / 100)
+        b.append(-y)
+        c += 10
+    return b
 def percentage(part, whole):
   return float(whole) * float(part)/100
 
+
+
 def plotPeaks(data, x_seconds=True, sampleRate=8):
+
+ 
     list_time = []
     fs = 8
-    # for y in data.index.values:
-    #     print(y)
-    #     d = datetime.strptime(str(y), '%Y-%m-%dT%H:%M:%S.%f000')
-    #     str_time = datetime.strftime(d, '%Y-%m-%d %H:%M:%S')
-    #     print(str_time)
-    #     list_time.append(str_time)
-
-    popup = pd.read_csv(r'C:\Users\user\Desktop\FieldStudy\GREEFA\P13\popup\2019-10-18.csv',
-                        names=['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity',
-                               'status_popup', 'notes'], sep = ';')
-    data['timestamp'] = data.index
-
-    data['timestamp']  = pd.to_datetime(data.index.values, utc=True).tz_convert('Europe/Berlin')
-    #df = pd.merge_asof(data, popup, on='timestamp')
-    data['timestamp'] = data['timestamp'] + data['timestamp'].apply(lambda x : x.utcoffset())
-
-    popup['timestamp'] = pd.to_datetime(popup['timestamp'], utc = True)
+    print(data['filtered_eda'].empty)
+    names = ['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity',
+             'status_popup', 'notes', 'filtered_eda']
+    popup = pd.read_csv(r'C:/Users/Daniela/Desktop/EmoVizPhy/stress_awareness/stress_awareness/LabStudy/S1/popup/popup/2022-06-02.csv', sep = ';')
+    
+    print(popup)
+  
+    data['timestamp'] = pd.to_datetime(data.index.values, utc=True).tz_convert('Europe/Berlin')
+    print(data['timestamp'])
+    data['timestamp'] = data['timestamp'] + data['timestamp'].apply(lambda x: x.utcoffset())
+    popup['timestamp'] = pd.to_datetime(popup['timestamp'], utc=True)
+    data['hours'] = data['timestamp'].dt.hour
+    popup['hours'] = popup['timestamp'].dt.hour
     df_merged = pd.merge(popup, data, on='timestamp', how='outer')
-
-
-    start = data.index.values[0]
-    print(start)
-    print(data.index.values)
-    print(len(data.index.values))
-
-    start = datetime.strptime(str(start), '%Y-%m-%dT%H:%M:%S.%f000')
-    # start = datetime.strftime(start, '%Y-%m-%d %H:%M:%S')
-    delta = timedelta(seconds=fs * len(data.index.values))
-    end = start + delta
-    #t =
+    df_merged['timestamp'] = pd.to_datetime(df_merged['timestamp'].values, utc=True)
+    df_merged = df_merged.sort_values(by='timestamp')
+    df_merged.to_csv('merged.csv')
+    #df_merged = df_merged[df_merged['filtered_eda'].notna()]
     t = pd.to_datetime(data['timestamp'])
-    print(t)
-    print(len(t))
     # list_time = [datetime.strptime(y, '%Y/%m/%d %H:%M:%S') for y in data.values.tolist()]
     # print(list_time)
     if x_seconds:
         # time_m = np.arange(0, len(data)) / float(sampleRate)
         time_m = t
-    else:
-        time_m = np.arange(0, len(data)) / (sampleRate * 60.)
 
-    data_min = min(data['EDA'])
-    data_max = max(data['EDA'])
+    print(data['filtered_eda'].empty)
+    data_min = min(data['filtered_eda'])
 
-    # Plot the data with the Peaks marked
+    data_max = max(data['filtered_eda'])
 
-    fig = plt.figure(figsize=(20, 5))
-
-    peak_height = data_max * 1.15
-    plt.locator_params(axis='x', nbins=10)
-    data['peaks_plot'] = data['peaks'] * peak_height
-    plt.plot(time_m, data['peaks_plot'], '#4DBD33')
-    # plt.plot(time_m,data['EDA'])
-    plt.plot(time_m, data['filtered_eda'])
-    # plt.xlim([0, time_m[-1]])
-    # plt.xticks(t)
-
-    y_min = min(0, data_min) - (data_max - data_min) * 0.1
-    plt.ylim([min(y_min, data_min), peak_height])
-    plt.title('EDA with Peaks marked')
-    plt.ylabel('$\mu$S')
-    ax = plt.gca()
-
-    print(df_merged)
-    #df_merged.plot(kind='line', x='activity', y='filtered_eda', ax=ax)
-
-    df_new = df_merged[['timestamp', 'activity']].dropna().set_index('timestamp')
-    df_new.index = pd.to_datetime(df_new.index.values, utc=True).tz_convert('Europe/Berlin')
-    for t, a in df_new.iterrows():
-        plt.axvline(t, 0,4, c = 'k')
-        ax.annotate(a.iloc[0], xy = (t,4), xytext = (t, -1.0), horizontalalignment = 'center', arrowprops = dict(arrowstyle = '-',linestyle = '--', color = 'k'))
-
-    df_new1 = df_merged[['timestamp', 'valence']].dropna().set_index('timestamp')
-    df_new1.index = pd.to_datetime(df_new1.index.values, utc=True).tz_convert('Europe/Berlin')
-    for t, a in df_new1.iterrows():
-        ax.annotate(str(a.iloc[0]), xy=(t, 4), xytext = (t, -1.5))
-
-    df_new1 = df_merged[['timestamp', 'arousal']].dropna().set_index('timestamp')
-    df_new1.index = pd.to_datetime(df_new1.index.values, utc=True).tz_convert('Europe/Berlin')
-    for t, a in df_new1.iterrows():
-        ax.annotate(str(a.iloc[0]), xy=(t, 4), xytext = (t, -2.0))
+    pn.extension()
 
 
-    df_new1 = df_merged[['timestamp', 'dominance']].dropna().set_index('timestamp')
-    df_new1.index = pd.to_datetime(df_new1.index.values, utc=True).tz_convert('Europe/Berlin')
-    for t, a in df_new1.iterrows():
-        ax.annotate(str(a.iloc[0]), xy=(t, 4), xytext = (t, -2.5))
+    df_popup = df_merged[['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity', 'notes', 'filtered_eda']]
+    # drop the row if the column activity is nan
+    df_popup = df_popup[df_popup['activity'].notna()]
+    print(df_popup)
+    # plot df_popup in another fig
+    datasrc = ColumnDataSource(df_popup)
+
+    # Define the figure and its parameters
+    fig = figure(x_axis_type='datetime', plot_width=1500, plot_height=400,
+                    title='EDA with Peaks marked as vertical lines', x_axis_label='Time', y_axis_label='$\mu$S',sizing_mode = 'stretch_both')
+
+    # Define the data source
+    data_src = ColumnDataSource(df_merged)
+
+  
+    line_plot = fig.line(x='timestamp', y='filtered_eda', source=data_src)
+    circle_plot = fig.circle(name = 'report', x='timestamp', y='filtered_eda', source=datasrc, fill_color="white", size= 8)
+
+    line_hover = HoverTool(renderers=[line_plot], tooltips=[("EDA", "@filtered_eda"), ("Timestamp", "@timestamp{%F}")], formatters={'@timestamp': 'datetime'})
+    circle_hover = HoverTool(renderers=[circle_plot], tooltips=[("Activity", "@activity"), ("Valence", "@valence"), ("Arousal", "@arousal"), ("Dominance", "@dominance"), ("Productivity", "@productivity"), ("Notes", "@notes"), ("Timestamp", "@timestamp{%F}")], formatters={'@timestamp': 'datetime'})
+    fig.add_tools(line_hover, circle_hover)
 
 
-    fig.subplots_adjust(bottom = 0.3)
-    # plt.savefig(r'C:\Users\user\Desktop\FieldStudy\ASML\P18\11-13.png')
-    plt.show()
+    #Add the peak markers to the figure
+    peak_height = data['filtered_eda'].max() * 1.15
+    df_merged['peaks_plot'] = df_merged['peaks'] * peak_height
+    df_peak = df_merged[['timestamp', 'peaks_plot', 'arousal']].set_index('timestamp')
+    df_peak = df_peak.fillna(method='backfill').fillna(method='ffill').loc[~((df_peak['peaks_plot'] == 0))]
+    for t, a in df_peak.iterrows():
+        if a['arousal'] == 1 or a['arousal'] == 2:
+            color = '#4DBD33'
+        elif a['arousal'] == 3:
+            color = '#FF8C00'
+        else:
+            color = '#FF0000'
+        fig.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
+
+
+    #add below the first plot aonther plot with another signal
+    fig2 = figure(x_axis_type='datetime', plot_width=1500, plot_height=400,
+    title='EDA with Peaks marked as vertical lines', x_axis_label='Time', y_axis_label='$\mu$S')
+
+    fig2.line(x='timestamp', y='filtered_eda', source=data_src)
+
+    fig3 = figure(x_axis_type='datetime', plot_width=1500, plot_height=400,
+    title='EDA with Peaks marked as vertical lines', x_axis_label='Time', y_axis_label='$\mu$S')
+
+    fig3.line(x='timestamp', y='filtered_eda', source=data_src)
+
+    fig4 = figure(x_axis_type='datetime', plot_width=1500, plot_height=400,
+    title='EDA with Peaks marked as vertical lines', x_axis_label='Time', y_axis_label='$\mu$S')
+
+    fig4.line(x='timestamp', y='filtered_eda', source=data_src)
+
+    fig4.add_layout(Label(text="Bottom Centered Title"), "below")
+
+
+
+
+
+    show(column(fig, fig2, fig3, fig4))
 
 
 
@@ -416,8 +428,8 @@ def calcPeakFeatures(data, outfile, offset=1, thresh=0.005, start_WT=4, end_WT=4
 
     return data
 
-fullOutputPath = r'C:\Users\user\Desktop\FieldStudy\ASML\P18\week1\10_31_2019, 12_00_38\find_peak.csv'
-filepath = r'C:\Users\user\Desktop\FieldStudy\GREEFA\P13\week2\10_18_2019, 08_16_50'
+fullOutputPath = r'C:/Users/Daniela/Desktop/EmoVizPhy/stress_awareness/stress_awareness/LabStudy/S1/Data/2giugno2022_150205_A02886/find_peak.csv'
+filepath = r'C:/Users/Daniela/Desktop/EmoVizPhy/stress_awareness/stress_awareness/LabStudy/S1/Data/2giugno2022_150205_A02886'
 filepath_confirm = os.path.join(filepath, "EDA.csv")
 data = loadData_E4(filepath)
 #data = detect_fast_edges(data)

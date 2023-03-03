@@ -189,7 +189,7 @@ def plotPeaks(data, x_seconds, sampleRate=SAMPLE_RATE):
     names = ['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity',
              'status_popup', 'notes', 'filtered_eda']
     popup = pd.read_csv(
-        r'C:/Users/Daniela/Desktop/EmoVizPhy/stress_awareness/stress_awareness/LabStudy/S1/popup/popup/2022-06-02.csv',
+        r'..//LabStudy/S1/popup/popup/2022-06-02.csv',
         sep=';')
 
     print(popup)

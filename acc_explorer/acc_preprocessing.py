@@ -3,12 +3,6 @@ import constant
 import logging
 
 
-
-
-def remove_gravity_in_z(data):
-    data[:, 2] = data[:, 2] - constant.G
-    return data
-
 def convert_data_in_g(data):
     return data / constant.G
 

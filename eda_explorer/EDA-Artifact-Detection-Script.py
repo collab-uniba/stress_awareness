@@ -3,9 +3,7 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import pywt
-import os
-import datetime
-import sys
+
 
 from load_files import getInputLoadFile, get_user_input
 from ArtifactClassifiers import predict_binary_classifier, predict_multiclass_classifier
@@ -210,7 +208,7 @@ def getSVMFeatures(key):
         return
 
 
-def classify(classifierList, input):
+def classify(classifierList, eda, acc, temp):
     '''
     This function wraps other functions in order to load, classify, and return the label for each 5 second epoch of Q sensor data.
 
@@ -226,7 +224,7 @@ def classify(classifierList, input):
 
     # Load data
 
-    data, _ = getInputLoadFile(input)
+    data = getInputLoadFile(eda, acc, temp)
 
     # Get pickle List and featureNames list
     featureNameList = [[]] * len(classifierList)
@@ -333,36 +331,5 @@ def plotData(data, labels, classifierList, filteredPlot=0, secondsPlot=0):
     plt.subplots_adjust(hspace=.3)
     plt.show()
     return
-
-
-# if __name__ == "__main__":
-#
-#     numClassifiers = 1
-#     classifierList = ['Binary']
-#     labels, data = classify(classifierList)
-#     fullOutputPath = sys.argv[2]
-#
-#     if fullOutputPath[-4:] != '.csv':
-#         fullOutputPath = fullOutputPath + '.csv'
-#
-#     featureLabels = pd.DataFrame(labels, index=pd.date_range(start=data.index[0], periods=len(labels), freq='5s'),
-#                                  columns=classifierList)
-#
-#     featureLabels.reset_index(inplace=True)
-#     featureLabels.rename(columns={'index': 'StartTime'}, inplace=True)
-#     featureLabels['EndTime'] = featureLabels['StartTime'] + datetime.timedelta(seconds=5)
-#     featureLabels.index.name = 'EpochNum'
-#
-#     cols = ['StartTime', 'EndTime']
-#     cols.extend(classifierList)
-#
-#     featureLabels = featureLabels[cols]
-#     featureLabels.rename(columns={'Binary': 'BinaryLabels', 'Multiclass': 'MulticlassLabels'},
-#                          inplace=True)
-#
-#     featureLabels.to_csv(fullOutputPath)
-#     data.to_csv(sys.argv[3])
-
-
 
 

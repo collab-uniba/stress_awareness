@@ -6,12 +6,14 @@ from datetime import datetime, timedelta
 from bokeh.io import output_file
 
 SAMPLE_RATE = 8
-import matplotlib.patches as mpatches
+import zipfile
+from base64 import b64decode
+from io import BytesIO
 import panel as pn
 import pandas as pd
 import numpy as np
 from bokeh.plotting import figure, show
-from bokeh.models import ColumnDataSource, Span, Label, LinearAxis, Title, Circle, HoverTool, CustomJS
+from bokeh.models import ColumnDataSource, Span, Label, HoverTool, Div, FileInput
 from bokeh.layouts import column
 
 def get_seconds_and_microseconds(pandas_time):

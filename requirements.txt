@@ -1,6 +1,8 @@
-numpy==1.16.2
-scipy==1.2.1
-pandas==0.24.1
-scikit-learn==0.20.3
+numpy~=1.24.2
+scipy~=1.10.1
+pandas~=1.5.3
+scikit-learn~=1.2.1
 matplotlib>=2.1.2
-PyWavelets==1.0.2
+PyWavelets
+panel~=0.14.3
+bokeh~=2.4.3

@@ -1,12 +1,8 @@
-import pprint
-import sys
 import pandas as pd
 import numpy as np
-from bokeh.plotting import figure, show
-from bokeh.models import ColumnDataSource, Span, Label, HoverTool
-from bokeh.layouts import column
+
 SAMPLE_RATE = 8
-import panel as pn
+
 
 def findPeaks(data, offset, start_WT, end_WT, thres=0, sampleRate=SAMPLE_RATE):
     '''
@@ -181,106 +177,6 @@ def calcPeakFeatures(data, outfile, offset, thresh, start_WT, end_WT):
 
     return data
 
-
-def plotPeaks(data, x_seconds, sampleRate=SAMPLE_RATE):
-    list_time = []
-    fs = 8
-    print(data['filtered_eda'].empty)
-    names = ['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity',
-             'status_popup', 'notes', 'filtered_eda']
-    popup = pd.read_csv(
-        r'..//LabStudy/S1/popup/popup/2022-06-02.csv',
-        sep=';')
-
-    print(popup)
-
-    data['timestamp'] = pd.to_datetime(data.index.values, utc=True).tz_convert('Europe/Berlin')
-    print(data['timestamp'])
-    data['timestamp'] = data['timestamp'] + data['timestamp'].apply(lambda x: x.utcoffset())
-    popup['timestamp'] = pd.to_datetime(popup['timestamp'], utc=True)
-    data['hours'] = data['timestamp'].dt.hour
-    popup['hours'] = popup['timestamp'].dt.hour
-    df_merged = pd.merge(popup, data, on='timestamp', how='outer')
-    df_merged['timestamp'] = pd.to_datetime(df_merged['timestamp'].values, utc=True)
-    df_merged = df_merged.sort_values(by='timestamp')
-    df_merged.to_csv('merged.csv')
-    # df_merged = df_merged[df_merged['filtered_eda'].notna()]
-    t = pd.to_datetime(data['timestamp'])
-    if x_seconds:
-        # time_m = np.arange(0, len(data)) / float(sampleRate)
-        time_m = t
-
-    print(data['filtered_eda'].empty)
-    data_min = min(data['filtered_eda'])
-
-    data_max = max(data['filtered_eda'])
-
-    pn.extension()
-
-    df_popup = df_merged[
-        ['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity', 'notes', 'filtered_eda']]
-    # drop the row if the column activity is nan
-    df_popup = df_popup[df_popup['activity'].notna()]
-    print("df_popup")
-    print(df_popup)
-    # plot df_popup in another fig
-    datasrc = ColumnDataSource(df_popup)
-
-    # Define the figure and its parameters
-    fig = figure(x_axis_type='datetime', plot_width=1500, plot_height=400,
-                 title='EDA with Peaks marked as vertical lines', x_axis_label='Time', y_axis_label='$\mu$S',
-                 sizing_mode='stretch_both')
-
-    # Define the data source
-    data_src = ColumnDataSource(df_merged)
-
-    line_plot = fig.line(x='timestamp', y='filtered_eda', source=data_src)
-    circle_plot = fig.circle(name='report', x='timestamp', y='filtered_eda', source=datasrc, fill_color="white", size=8)
-
-    line_hover = HoverTool(renderers=[line_plot], tooltips=[("EDA", "@filtered_eda"), ("Timestamp", "@timestamp{%F}")],
-                           formatters={'@timestamp': 'datetime'})
-    circle_hover = HoverTool(renderers=[circle_plot],
-                             tooltips=[("Activity", "@activity"), ("Valence", "@valence"), ("Arousal", "@arousal"),
-                                       ("Dominance", "@dominance"), ("Productivity", "@productivity"),
-                                       ("Notes", "@notes"), ("Timestamp", "@timestamp{%F}")],
-                             formatters={'@timestamp': 'datetime'})
-    fig.add_tools(line_hover, circle_hover)
-
-    # Add the peak markers to the figure
-    peak_height = data['filtered_eda'].max() * 1.15
-    df_merged['peaks_plot'] = df_merged['peaks'] * peak_height
-    df_peak = df_merged[['timestamp', 'peaks_plot', 'arousal']].set_index('timestamp')
-    df_peak = df_peak.fillna(method='backfill').fillna(method='ffill').loc[~((df_peak['peaks_plot'] == 0))]
-    for t, a in df_peak.iterrows():
-        if a['arousal'] == 1 or a['arousal'] == 2:
-            color = '#4DBD33'
-        elif a['arousal'] == 3:
-            color = '#FF8C00'
-        else:
-            color = '#FF0000'
-        fig.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
-
-    # add below the first plot aonther plot with another signal
-    fig2 = figure(x_axis_type='datetime', plot_width=1500, plot_height=400,
-                  title='EDA with Peaks marked as vertical lines', x_axis_label='Time', y_axis_label='$\mu$S')
-
-    fig2.line(x='timestamp', y='filtered_eda', source=data_src)
-
-    fig3 = figure(x_axis_type='datetime', plot_width=1500, plot_height=400,
-                  title='EDA with Peaks marked as vertical lines', x_axis_label='Time', y_axis_label='$\mu$S')
-
-    fig3.line(x='timestamp', y='filtered_eda', source=data_src)
-
-    fig4 = figure(x_axis_type='datetime', plot_width=1500, plot_height=400,
-                  title='EDA with Peaks marked as vertical lines', x_axis_label='Time', y_axis_label='$\mu$S')
-
-    fig4.line(x='timestamp', y='filtered_eda', source=data_src)
-
-    fig4.add_layout(Label(text="Bottom Centered Title"), "below")
-
-    show(column(fig, fig2, fig3, fig4))
-
-
 def chooseValueOrDefault(str_input, default):
     if str_input == "":
         return default
@@ -295,33 +191,4 @@ def calc_y(a,c ):
         b.append(-y)
         c += 10
     return b
-
-
-if __name__ == "__main__":
-
-    path_to_E4 = sys.argv[1]
-    data = pd.read_csv(path_to_E4)
-    data.index = data['timestamp']
-    data.index = pd.to_datetime(data.index.values)
-    filepath_confirm = path_to_E4
-
-    fullOutputPath = sys.argv[2]
-
-
-    thresh = .2
-    offset = 2
-    start_WT = 4
-    end_WT = 4
-
-    settings_dict = {'threshold': thresh,
-                     'offset': offset,
-                     'rise time': start_WT,
-                     'decay time': end_WT}
-
-    print("")
-    print("Okay, finding peaks in file " + filepath_confirm + " using the following parameters")
-    pprint.pprint(settings_dict)
-    peakData = calcPeakFeatures(data, fullOutputPath, offset, thresh, start_WT, end_WT)
-    print("Features computed and saved to " + fullOutputPath)
-    plotPeaks(peakData, True)
 

@@ -1,0 +1,3 @@
+NUM_HZ_ACC = 32
+G = 64
+NUM_HZ_HR = 1

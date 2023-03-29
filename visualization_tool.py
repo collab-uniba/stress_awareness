@@ -30,12 +30,13 @@ from panel.widgets import FileInput
 '''
 numClassifiers = 1
 classifierList = ['Binary']
-thresh = .2
-offset = 2
-start_WT = 4
-end_WT = 4
 artifact_output_path = r"./temp"
 file_upload = FileInput()
+thresh = pn.widgets.TextInput(name='Peak width', placeholder='default .02', value='.02')
+offset = pn.widgets.TextInput(name='Peak start time', placeholder='default 1', value='1')
+start_WT = pn.widgets.TextInput(name='Peak end time', placeholder='default 4', value='4')
+end_WT = pn.widgets.TextInput(name='Minimum peak amplitude', placeholder='default 4', value='4')
+
 bokeh_pane = pn.pane.Bokeh()
 
 def classify_artifacts(classifierList, eda, acc,temp, fullOutputPath, ouput_path):
@@ -78,7 +79,7 @@ def detect_peak(ouput_path, artifact_path, thresh, offset, start_WT, end_WT):
     fullOutputPath = r"./eda_explorer/temp" + "/result_peak.csv"
 
     return eda_peak.calcPeakFeatures(
-        data, fullOutputPath, offset, thresh, start_WT, end_WT
+        data, fullOutputPath, float(offset.value), float(thresh.value), int(start_WT.value), int(end_WT.value)
     )
 
 
@@ -171,7 +172,7 @@ def process(EDA, ACC, TEMP, popup):
     data_src = ColumnDataSource(df_merged)
 
     line_plot = fig.line(x='timestamp', y='filtered_eda', source=data_src)
-    circle_plot = fig.circle(name='report', x='timestamp', y='filtered_eda', source=datasrc, fill_color="red",
+    circle_plot = fig.circle(name='report', x='timestamp', y='filtered_eda', source=datasrc, fill_color="yellow",
                              size=9)
 
     line_hover = HoverTool(renderers=[line_plot],
@@ -220,7 +221,9 @@ button = pn.widgets.Button(name='Start Process', button_type='primary')
 button.on_click(start_process)
 fig = file_upload.param.watch(file_upload_handler, 'value')
 # Create a Panel layout for the dashboard
-layout = pn.Column("# Upload the Zip file of Empatica E4", file_upload, button, bokeh_pane, sizing_mode='stretch_both')
+
+params_row = pn.Row(offset, thresh, start_WT, end_WT)
+layout = pn.Column("# Upload the Zip file of Empatica E4", file_upload,params_row, button, bokeh_pane, sizing_mode='stretch_both')
 pn.extension()
 layout.show()
 

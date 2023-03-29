@@ -24,9 +24,6 @@ def plot_axes(data, num_hz):
 
 def plot_axes(data, date, times):
     
-
-
-
     names = list(data.keys())
     fig = go.Figure()
     for metric in names:

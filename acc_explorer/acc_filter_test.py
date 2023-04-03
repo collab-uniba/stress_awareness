@@ -3,9 +3,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import constant
 import numpy as np
-from acc_preprocessing import aggregating_with_mean, aggregating_with_max, aggregating_with_median
 from plot import plot_axes
-from acc_filtering import HFEN_plus, HFEN, BFEN, ENMO, empatica_filter, android_filter
+from eda_explorer.acc_filtering import HFEN_plus, ENMO, empatica_filter, android_filter
 from acc_preprocessing import calculate_magnitude_vector
 
 from hr_explorer.hr_preprocessing import calculate_date_time

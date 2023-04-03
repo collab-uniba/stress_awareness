@@ -20,14 +20,12 @@ def load_hr():
     ------------------------------------------
     '''
 
-    data = pd.read_csv('hr_explorer\HR.csv', header=None)
+    data = pd.read_csv('temp\HR.csv', header=None)
+
     timestamp_0 = data.iloc[0,0]
     data = np.array(data.iloc[2:, 0])
 
-    #Calculate data time form timestamp
-    date, times = calculate_date_time(timestamp_0, constant.NUM_HZ_HR, data.shape[0])
-   
-    return data, date, times
+    return data, timestamp_0
 
 
 

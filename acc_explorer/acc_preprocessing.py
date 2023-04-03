@@ -2,9 +2,7 @@ import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
-from scipy import signal
-import logging
-from skimage.measure import block_reduce
+
 import constant
 
 

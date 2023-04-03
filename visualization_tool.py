@@ -1,4 +1,6 @@
-import csv
+
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import glob
 import os
 import datetime
@@ -14,9 +16,11 @@ import zipfile
 sys.path.insert(1, './eda_explorer')
 eda_artifact = importlib.import_module("EDA-Artifact-Detection-Script")
 eda_peak = importlib.import_module("EDA-Peak-Detection-Script")
+accelerometer = importlib.import_module("acc_filtering")
 SAMPLE_RATE = 8
 import panel as pn
 from panel.widgets import FileInput
+
 
 '''
  Please note that this script use scripts released by Taylor et al. that you can find here: https://github.com/MITMediaLabAffectiveComputing/eda-explorer
@@ -38,7 +42,8 @@ start_WT = pn.widgets.TextInput(name='Peak end time', placeholder='default 4', v
 end_WT = pn.widgets.TextInput(name='Minimum peak amplitude', placeholder='default 4', value='4')
 
 bokeh_pane = pn.pane.Bokeh()
-
+bokeh_pane_acc = pn.pane.Bokeh()
+bokeh_pane_hr = pn.pane.Bokeh()
 def classify_artifacts(classifierList, eda, acc,temp, fullOutputPath, ouput_path):
     labels, data = eda_artifact.classify(classifierList, eda, acc, temp)
 
@@ -102,6 +107,24 @@ def uniform_csv(filename):
     with open(filename, 'w') as file:
       file.write(filedata)
 
+def calculate_date_time(timestamp_0, hz, num_rows):
+    format = "%d/%m/%Y, %H:%M:%S"
+
+    date_time_0 = datetime.datetime.fromtimestamp(timestamp_0)
+
+    #Change datatime format
+    date_time_0_str = date_time_0.strftime(format)
+    date_time_0 = datetime.datetime.strptime(date_time_0_str, format)
+
+    data_times = [date_time_0]
+    off_set = 1 / hz
+    for i in range(1, num_rows):
+        data_time_temp = data_times[i-1] + datetime.timedelta(seconds = off_set)
+        data_times.append(data_time_temp)
+
+    date = str(data_times[0].date())
+    times = [t.strftime("%H:%M:%S") for t in data_times]
+    return date, times
 
 def popup_process():
     #read all file in a specific folder
@@ -153,23 +176,67 @@ def process(EDA, ACC, TEMP, popup):
     data['hours'] = data['timestamp'].dt.hour
     popup['hours'] = popup['timestamp'].dt.hour
     print(popup)
+    popup.to_csv('./temp/popup.csv')
+    data.to_csv('./temp/filtered.csv')
     df_merged = pd.merge(popup, data, on='timestamp', how='outer')
     df_merged['timestamp'] = pd.to_datetime(df_merged['timestamp'].values, utc=True)
     df_merged = df_merged.sort_values(by='timestamp')
     df_merged.to_csv('./temp/merged.csv')
+    #read csv as dataframe
+
+
+    #df_merged = pd.read_csv('./temp/merged.csv')
+    #popup = pd.read_csv('./temp/popup.csv')
+    #data = pd.read_csv('./temp/filtered.csv')
+
     print(data['filtered_eda'].empty)
+
     df_popup = df_merged[
         ['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity', 'notes', 'filtered_eda']]
     # drop the row if the column activity is nan
     df_popup = df_popup[df_popup['activity'].notna()]
     # plot df_popup in another fig
+
     datasrc = ColumnDataSource(df_popup)
     fig = figure(x_axis_type='datetime', plot_width=1500, plot_height=400,
                  title='EDA with Peaks marked as vertical lines', x_axis_label='Time', y_axis_label='μS',
                  sizing_mode='stretch_both')
 
-    # Define the data source
+    hr, timestamp_0_hr = accelerometer.load_hr()
+    date, time = calculate_date_time(timestamp_0_hr, 1, len(hr))
+    df_hr = pd.DataFrame(hr, columns=['hr'])
+    df_hr['time'] = time
+    df_hr['date'] = date
+    df_hr['timestamp'] = pd.to_datetime(df_hr['date'] + ' ' + df_hr['time'])
+
+
+    acc, timestamp_0 = accelerometer.load_acc()
+    acc_filter = accelerometer.empatica_filter(acc)
+    date, time = calculate_date_time(timestamp_0,1,len(acc_filter))
+    # create a df with the filtered acc data and date and time
+    df_acc = pd.DataFrame(acc_filter, columns=['acc_filter'])
+    df_acc['time'] = time
+    df_acc['date'] = date
+    df_acc['timestamp'] = pd.to_datetime(df_acc['date'] + ' ' + df_acc['time'])
+
+    fig_hr = figure(x_axis_type='datetime', plot_width=1500, plot_height=400,
+                    title='Heart Rate', x_axis_label='Time', y_axis_label='BPM',
+                    sizing_mode='stretch_both')
+
+
+    fig_ACC = figure(x_axis_type='datetime', plot_width=1500, plot_height=400,
+                 title='Movement', x_axis_label='Time',
+                 sizing_mode='stretch_both')
+
     data_src = ColumnDataSource(df_merged)
+
+    data_src_acc = ColumnDataSource(df_acc)
+    data_src_hr = ColumnDataSource(df_hr)
+
+    line_plot_hr = fig_hr.line(x='timestamp', y='hr', source=data_src_hr)
+
+
+    line_plot_acc = fig_ACC.line(x='timestamp', y='acc_filter', source=data_src_acc)
 
     line_plot = fig.line(x='timestamp', y='filtered_eda', source=data_src)
     circle_plot = fig.circle(name='report', x='timestamp', y='filtered_eda', source=datasrc, fill_color="yellow",
@@ -200,6 +267,8 @@ def process(EDA, ACC, TEMP, popup):
         fig.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
 
     bokeh_pane.object = fig
+    bokeh_pane_acc.object = fig_ACC
+    bokeh_pane_hr.object = fig_hr
 
 
 def file_upload_handler(event):
@@ -208,6 +277,8 @@ def file_upload_handler(event):
     buffer = io.BytesIO(file)
     with zipfile.ZipFile(buffer) as zip_file:
         zip_file.extractall('./temp')
+
+
 
 
 def start_process(event):
@@ -223,7 +294,7 @@ fig = file_upload.param.watch(file_upload_handler, 'value')
 # Create a Panel layout for the dashboard
 
 params_row = pn.Row(offset, thresh, start_WT, end_WT)
-layout = pn.Column("# Upload the Zip file of Empatica E4", file_upload,params_row, button, bokeh_pane, sizing_mode='stretch_both')
+layout = pn.Column("# Upload the Zip file of Empatica E4", file_upload,params_row, button, bokeh_pane,bokeh_pane_hr,  bokeh_pane_acc, sizing_mode='stretch_both')
 pn.extension()
 layout.show()
 

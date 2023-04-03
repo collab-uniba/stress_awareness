@@ -1,10 +1,15 @@
 import os, sys
+
+import pandas as pd
+
+from acc_explorer.acc_preprocessing import convert_data_in_g
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 import numpy as np
 from scipy import signal
-from acc_preprocessing import calculate_magnitude_vector
+
 import constant
 
 #Source of the filters https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3634007/#pone.0061691.s001
@@ -138,3 +143,47 @@ def android_filter(data):
 	acc_z = data[:, 2] - np.array(g_z)
 
 	return acc_x, acc_y, acc_z
+
+
+def load_acc():
+	'''
+    CSV format (does not contain column names):
+    ------------------------------------------
+    timestamp   |   timestamp   |   timestamp
+        32      |       32      |       32
+    value_x     |   value_y     |   value_z
+    value_x     |   value_y     |   value_z
+        ...     |       ...     |       ...
+    value_x     |   value_y     |   value_z
+    ------------------------------------------
+    '''
+
+	data = pd.read_csv('temp\ACC.csv', header=None)
+
+	data = np.array(data)
+
+	timestamp_0 = data[0, 0]
+	# Remove first (timestamp) and second (Hz) rows
+	data = convert_data_in_g(data[2:])
+
+	return data, timestamp_0
+
+
+def load_hr():
+	'''
+    CSV format (does not contain column names):
+    ------------------------------------------
+                    timestamp
+                        1
+                      value
+                       ...
+                      value
+    ------------------------------------------
+    '''
+
+	data = pd.read_csv('temp\HR.csv', header=None)
+
+	timestamp_0 = data.iloc[0, 0]
+	data = np.array(data.iloc[2:, 0])
+
+	return data, timestamp_0

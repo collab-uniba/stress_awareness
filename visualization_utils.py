@@ -5,6 +5,10 @@ import importlib
 import sys
 import constant
 import pandas as pd
+from bokeh.models import ColumnDataSource, HoverTool
+from bokeh.plotting import figure
+
+
 sys.path.insert(1, './signalPreprocess')
 eda_artifact = importlib.import_module("EDA-Artifact-Detection-Script")
 eda_peak = importlib.import_module("EDA-Peak-Detection-Script")
@@ -138,13 +142,7 @@ def convert_to_datetime(data, popup):
     df_merged = df_merged.sort_values(by='timestamp')
     return df_merged
 
-def process_acc_hr():
-    hr, timestamp_0_hr = accelerometer.load_hr()
-    date, time = calculate_date_time(timestamp_0_hr, 1, len(hr))
-    df_hr = pd.DataFrame(hr, columns=['hr'])
-    df_hr['time'] = time
-    df_hr['date'] = date
-    df_hr['timestamp'] = pd.to_datetime(df_hr['date'] + ' ' + df_hr['time'])
+def process_acc():
     acc, timestamp_0 = accelerometer.load_acc()
     acc_filter = accelerometer.empatica_filter(acc)
     date, time = calculate_date_time(timestamp_0,1,len(acc_filter))
@@ -153,4 +151,37 @@ def process_acc_hr():
     df_acc['time'] = time
     df_acc['date'] = date
     df_acc['timestamp'] = pd.to_datetime(df_acc['date'] + ' ' + df_acc['time'])
-    return df_acc, df_hr
+    return df_acc
+
+def process_hr():
+    hr, timestamp_0_hr = accelerometer.load_hr()
+    date, time = calculate_date_time(timestamp_0_hr, 1, len(hr))
+    df_hr = pd.DataFrame(hr, columns=['hr'])
+    df_hr['time'] = time
+    df_hr['date'] = date
+    df_hr['timestamp'] = pd.to_datetime(df_hr['date'] + ' ' + df_hr['time'])
+
+    return df_hr
+
+
+def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup = None):
+    fig_sign = figure(x_axis_type='datetime', plot_width=1500, plot_height=400,
+                    title=title, x_axis_label='Time', y_axis_label=y_axis_label,
+                    sizing_mode='stretch_both')
+    data_src_sign = ColumnDataSource(df_sign)
+    line_plot_sign = fig_sign.line(x=x, y=y, source=data_src_sign)
+    line_hover = HoverTool(renderers=[line_plot_sign],
+                            tooltips=[(sign, "@"+y), ("Time", "@timestamp{%H:%M:%S}")],
+                            formatters={'@timestamp': 'datetime'})
+    fig_sign.add_tools(line_hover)
+    if sign == 'EDA':
+        datasrc = ColumnDataSource(df_popup)
+        circle_plot = fig_sign.circle(name='report', x=x, y=y, source=datasrc, fill_color="yellow",
+                               size=9)
+        circle_hover = HoverTool(renderers=[circle_plot],
+                                tooltips=[("Activity", "@activity"), ("Valence", "@valence"), ("Arousal", "@arousal"),
+                                        ("Dominance", "@dominance"), ("Productivity", "@productivity"),
+                                        ("Notes", "@notes"), ("Timestamp", "@timestamp{%H:%M:%S}"), (sign, "@"+y)],
+                                formatters={'@timestamp': 'datetime'})
+        fig_sign.add_tools(circle_hover)
+    return fig_sign

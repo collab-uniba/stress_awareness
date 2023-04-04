@@ -1,11 +1,10 @@
 import os
-from bokeh.plotting import figure
 from bokeh.models import Span
 import io
 import zipfile
 import constant
 import pandas as pd
-from visualization_utils import classify_artifacts, detect_peak, popup_process, convert_to_datetime, process_acc, process_hr, create_fig_line
+from visualization_utils import classify_artifacts, detect_peak, popup_process, process_data_popup, process_acc, process_hr, create_fig_line
 import panel as pn
 from panel.widgets import FileInput
 import configparser
@@ -34,6 +33,14 @@ def process(EDA, ACC, TEMP, popup):
     config_data = configparser.ConfigParser()
     config_data.read("config.ini")
     plot = config_data["PLOT"]
+    
+    #Check for missing signals in config
+    signals = ['EDA', 'HR', 'ACC']
+    for s in signals:
+        if s not in plot.keys():
+            plot[s] = '0'
+
+
 
     #EDA
     if int(plot['EDA']) == 1:
@@ -41,27 +48,38 @@ def process(EDA, ACC, TEMP, popup):
         output_file_path = os.path.join(constant.artifact_output_path, "result.csv")
         classify_artifacts(EDA, ACC, TEMP, artifact_file, output_file_path)
         data = detect_peak(output_file_path, artifact_file, thresh, offset, start_WT, end_WT)
-        df_merged = convert_to_datetime(data, popup)
-        df_popup = df_merged[
-            ['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity', 'notes', 'filtered_eda']]
-        df_popup = df_popup[df_popup['activity'].notna()]
-        fig_eda = create_fig_line(df_merged, 'timestamp', 'filtered_eda', 'EDA with Peaks marked as vertical lines', 'μS', 'EDA', df_popup)
+        
+        df_merged = process_data_popup(data, popup)
+        df_merged['timestamp'] = df_merged['timestamp'].apply(lambda x: x.time())
+
+        df_EDA = df_merged[
+            ['timestamp', 'activity', 'status_popup', 'valence', 'arousal', 'dominance', 'productivity', 'notes', 'filtered_eda']]
+       
+        df_data = df_EDA[df_EDA['status_popup'].isna()]
+        df_data = df_data[['timestamp', 'filtered_eda']]
+        df_data.reset_index(inplace=True, drop=True)
+        
+        df_popup = df_EDA[df_EDA['status_popup'] == 'POPUP_CLOSED']
+        
+        
+        fig_eda = create_fig_line(df_data, 'timestamp', 'filtered_eda', 'EDA with Peaks marked as vertical lines', 'μS', 'EDA', df_popup)
 
         # Add the peak markers to the figure
         peak_height = data['filtered_eda'].max() * 1.15
         df_merged['peaks_plot'] = df_merged['peaks'] * peak_height
         df_peak = df_merged[['timestamp', 'peaks_plot', 'arousal']].set_index('timestamp')
         df_peak = df_peak.fillna(method='backfill').fillna(method='ffill').loc[~(df_peak['peaks_plot'] == 0)]
+        
         for t, a in df_peak.iterrows():
-            if a['arousal'] == 'Low':
+            if a['arousal'] == 'Low 🧘‍♀':
                 color = '#4DBD33'
-            elif a['arousal'] == 'Medium':
+            elif a['arousal'] == 'Medium 😐':
                 color = '#FF8C00'
             else:
                 color = '#FF0000'
             fig_eda.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
         bokeh_pane_eda.object = fig_eda
-        
+    
     #ACC
     if int(plot['ACC']) == 1:
         df_acc  = process_acc()
@@ -71,7 +89,7 @@ def process(EDA, ACC, TEMP, popup):
     if int(plot['HR']) == 1:
         df_hr = process_hr()   
         bokeh_pane_hr.object = create_fig_line(df_hr, 'timestamp', 'hr', 'Heart Rate', 'BPM', 'HR')
-        
+
 
 def file_upload_handler(event):
     # Get the uploaded file

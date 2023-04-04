@@ -5,7 +5,7 @@ import importlib
 import sys
 import constant
 import pandas as pd
-from bokeh.models import ColumnDataSource, HoverTool
+from bokeh.models import ColumnDataSource, HoverTool, Span
 from bokeh.plotting import figure
 
 
@@ -131,9 +131,16 @@ def convert_to_discrete(frame, column):
     }
     frame[column] = frame[column].replace(replacements[column])
 
-def convert_to_datetime(data, popup):
+def process_data_popup(data, popup):
     data['timestamp'] = pd.to_datetime(data.index.values, utc=True).tz_convert('Europe/Berlin')
     data['timestamp'] = data['timestamp'] + data['timestamp'].apply(lambda x: x.utcoffset())
+    
+    #Rimozione dei popup relativi agli altri giorni
+    data.reset_index(inplace=True, drop=True)
+    date = data.loc[0, 'timestamp']
+    popup = extract_popup_date(popup, date)
+
+
     popup['timestamp'] = pd.to_datetime(popup['timestamp'], utc=True)
     data['hours'] = data['timestamp'].dt.hour
     popup['hours'] = popup['timestamp'].dt.hour
@@ -170,10 +177,22 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup = None):
                     sizing_mode='stretch_both')
     data_src_sign = ColumnDataSource(df_sign)
     line_plot_sign = fig_sign.line(x=x, y=y, source=data_src_sign)
+    
+
     line_hover = HoverTool(renderers=[line_plot_sign],
                             tooltips=[(sign, "@"+y), ("Time", "@timestamp{%H:%M:%S}")],
                             formatters={'@timestamp': 'datetime'})
     fig_sign.add_tools(line_hover)
+
+    
+    #Mean
+    mean = df_sign.loc[:, y].mean()
+    fig_sign.add_layout(Span(location=mean, dimension='width', line_color="red", line_alpha=0.5, line_width=1, line_dash='dashed'))
+    
+
+    
+    
+    
     if sign == 'EDA':
         datasrc = ColumnDataSource(df_popup)
         circle_plot = fig_sign.circle(name='report', x=x, y=y, source=datasrc, fill_color="yellow",
@@ -184,4 +203,19 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup = None):
                                         ("Notes", "@notes"), ("Timestamp", "@timestamp{%H:%M:%S}"), (sign, "@"+y)],
                                 formatters={'@timestamp': 'datetime'})
         fig_sign.add_tools(circle_hover)
+    
+    
     return fig_sign
+
+def extract_popup_date(popup, timestamp):
+    #Rimuove i popup relativi agli altri giorni
+    date = timestamp.date()
+    popup.reset_index(inplace=True, drop=True)
+    for i in range(popup.shape[0]):
+        date_temp = popup.loc[i, 'timestamp'].date()
+
+        if date_temp != date:
+            popup.drop(i, inplace=True)
+            
+    popup.reset_index(inplace=True, drop=True)
+    return popup

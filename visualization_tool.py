@@ -1,6 +1,7 @@
 import datetime
 import os
 import re
+import shutil
 from bokeh.models import Span
 import io
 import zipfile
@@ -23,14 +24,14 @@ from scipy.stats import rankdata
 
 '''
 
-file_upload = FileInput(accept='.zip')
-thresh = pn.widgets.TextInput(name='Peak width', placeholder='default .02', value='.02')
-offset = pn.widgets.TextInput(name='Peak start time', placeholder='default 1', value='1')
-start_WT = pn.widgets.TextInput(name='Peak end time', placeholder='default 4', value='4')
-end_WT = pn.widgets.TextInput(name='Minimum peak amplitude', placeholder='default 4', value='4')
-bokeh_pane_eda = pn.pane.Bokeh()
-bokeh_pane_acc = pn.pane.Bokeh()
-bokeh_pane_hr = pn.pane.Bokeh()
+
+bokeh_pane_eda = pn.pane.Bokeh(visible=False, sizing_mode='stretch_both')
+bokeh_pane_hr = pn.pane.Bokeh(visible=False, sizing_mode='stretch_both')
+bokeh_pane_acc = pn.pane.Bokeh(visible=False, sizing_mode='stretch_both')
+
+text_title_student = pn.widgets.StaticText()
+text_title_day = pn.widgets.StaticText()
+text_title_session = pn.widgets.StaticText()
 
 
 
@@ -42,15 +43,20 @@ sessions = [] # Lista dei timestamp delle sessioni
 
 pn.extension()
 
+
+config_data = configparser.ConfigParser()
+config_data.read("config.ini")
+plot = config_data["PLOT"]
+
+
+
 def process(date, session):
     global bokeh_pane_acc
     global bokeh_pane_eda
     global bokeh_pane_hr
     global progress_bar
 
-    config_data = configparser.ConfigParser()
-    config_data.read("config.ini")
-    plot = config_data["PLOT"]
+    global plot
     
     #Check for missing signals in config
     signals = ['EDA', 'HR', 'ACC']
@@ -63,9 +69,10 @@ def process(date, session):
     #x_range serve per muovere i grafici insieme sull'asse x
     x_range = None
     progress_bar.value = 20
+    
     #EDA
     if int(plot['EDA']) == 1:
-
+        bokeh_pane_eda.visible = True
         EDA, ACC, TEMP, popup = get_session(path_session)
         artifact_file = os.path.join(constant.artifact_output_path, "artifact_detected.csv")
 
@@ -123,8 +130,13 @@ def process(date, session):
     
     #ACC
     if int(plot['ACC']) == 1:
+        bokeh_pane_acc.visible = True
         df_acc  = process_acc(path_session)
-        fig_acc = create_fig_line(df_acc, 'timestamp', 'acc_filter', 'Movement', '', 'ACC', df_popup)
+
+        #Empatica suggerisce di rimuovere i primi 10 secondi
+        df_acc = df_acc[10:]
+        df_acc.reset_index(inplace=True, drop=True)
+        fig_acc = create_fig_line(df_acc, 'timestamp', 'acc_filter', 'Movement', 'Variation', 'ACC', df_popup)
         
         if x_range is None:
             x_range = fig_acc.x_range
@@ -136,6 +148,7 @@ def process(date, session):
     
     #HR
     if int(plot['HR']) == 1:
+        bokeh_pane_hr.visible = True
         df_hr = process_hr(path_session)   
         fig_hr = create_fig_line(df_hr, 'timestamp', 'hr', 'Heart Rate', 'BPM', 'HR', df_popup)
         if x_range is None:
@@ -149,12 +162,19 @@ def process(date, session):
     print('Fine')
 
 def file_upload_handler(event):
+    global file_zip_name_student
+    #Get file zip name
+    file_zip_name_student = file_upload.filename.rsplit('.', 1)[0]
+    #Se esiste già la cartella, la elimino
+    if os.path.exists('./temp/'+file_zip_name_student):
+        # Delete Folder code
+            shutil.rmtree('./temp/'+file_zip_name_student)
+
+
     # Get the uploaded file
     _file = event.new
     _buffer = io.BytesIO(_file)
-    #Get file zip name
-    global file_zip_name_student
-    file_zip_name_student = file_upload.filename.rsplit('.', 1)[0]
+    
     #Extract data and popup
     with zipfile.ZipFile(_buffer) as zip_file:
         for file in zip_file.namelist():
@@ -167,7 +187,6 @@ def file_upload_handler(event):
     
     create_directories_session_data(dir_path)
     create_directories_session_popup(dir_path)
-
 
     
 def get_session(path_session):    
@@ -207,14 +226,13 @@ def start_process(event):
     #Esempio di session: 'Session 2: 12:13:49'
     num_session = int(re.search(r'\d+', session).group())
 
-    global template
-    
-
     global current_session
     current_session = num_session_to_timestamp(num_session)
  
-    # TODO controllare perché non cambia il titolo
-    template.title = file_zip_name_student + '    Day: ' + day + '   ' + session
+    global text_title_day, text_title_student
+    text_title_day.value = 'Day: ' + day
+    text_title_session.value = session
+
     process(day, current_session)
 
 
@@ -245,45 +263,85 @@ def create_select_sessions(event):
     global select
     select.groups = groups
 
+    #Attivazione dei parametri dell'EDA e della scelta delle sessioni
+    global thresh, offset, start_WT, end_WT, button_session
+    thresh.disabled = False
+    offset.disabled = False
+    start_WT.disabled = False
+    end_WT.disabled = False
+    select.disabled = False
+    button_session.disabled = False
+
+    global text_title_student
+    text_title_student.value = 'Student: ' + file_zip_name_student
 
 
+#######                 #######
+#######                 #######
+#######     WIDGET      #######
+#######                 #######
+#######                 #######
 
 
-progress_bar = pn.indicators.Progress(name = 'Progress', visible=False, active=True, sizing_mode='stretch_width')
+#Inserimento del file zip
+file_upload = FileInput(accept='.zip', sizing_mode='stretch_width')
+fig = file_upload.param.watch(file_upload_handler, 'value')
 
-select = pn.widgets.Select(name='Select Session', options=sessions)
-button_student = pn.widgets.Button(name='Confirm student', button_type='primary')
+#Button per confermare lo studente
+button_student = pn.widgets.Button(name='Confirm student', button_type='primary', sizing_mode='stretch_width')
 button_student.on_click(create_select_sessions)
 
-button_session = pn.widgets.Button(name='Start Process', button_type='primary')
+#Progress Bar
+progress_bar = pn.indicators.Progress(name = 'Progress', visible=False, active=True, sizing_mode='stretch_width')
+
+#Selezione della sessione
+select = pn.widgets.Select(name='Select Session', options=sessions, disabled = True, sizing_mode='stretch_width')
+
+
+#Parametri EDA
+thresh = pn.widgets.TextInput(name='Peak width', placeholder='default .02', value='.02', disabled = True, sizing_mode='stretch_width')
+offset = pn.widgets.TextInput(name='Peak start time', placeholder='default 1', value='1', disabled = True, sizing_mode='stretch_width')
+start_WT = pn.widgets.TextInput(name='Peak end time', placeholder='default 4', value='4', disabled = True, sizing_mode='stretch_width')
+end_WT = pn.widgets.TextInput(name='Minimum peak amplitude', placeholder='default 4', value='4', disabled = True, sizing_mode='stretch_width')
+params_col = pn.Column(offset, thresh, start_WT, end_WT, visible = False, sizing_mode='stretch_width')
+
+# Se EDA è attivato nel file di configurazione, vengono visualizzati i parametri per i picchi
+if int(plot['EDA']) == 1:
+    params_col.visible = True
+
+#Button per confermare la sessione
+button_session = pn.widgets.Button(name='Start Process', button_type='primary', disabled = True, sizing_mode='stretch_width')
 button_session.on_click(start_process)
-fig = file_upload.param.watch(file_upload_handler, 'value')
-# Create a Panel layout for the dashboard
-params_row = pn.Column(offset, thresh, start_WT, end_WT)
-'''
-layout = pn.Column("# Upload the Zip file of Empatica E4", 
-                   file_upload, params_row, 
-                   button_student, 
-                   select, button_session,
-                   progress_bar,
-                   bokeh_pane_eda,bokeh_pane_hr,  bokeh_pane_acc,
-                   sizing_mode='stretch_width')
 
-layout.show()
-'''
-
-title = ''
-col = pn.Column(bokeh_pane_acc, bokeh_pane_hr, sizing_mode='stretch_width')
+#Template
 template = pn.template.FastGridTemplate(
-    site="EmoVizPhy", title=title,
-    sidebar=[file_upload, button_student, params_row, select, button_session, progress_bar],
-    #main = [col]
+    site="EmoVizPhy", title = '',
+    sidebar=[file_upload, button_student, params_col, select, button_session, progress_bar],
+    theme_toggle = False
 )
-#12 è il massimo
-template.main[:2, :12] = bokeh_pane_eda
-template.main[2:4, :12] = bokeh_pane_hr
-template.main[4:6, :12] = bokeh_pane_acc
 
-#template.main[:3, 6:] = pn.pane.HoloViews(bokeh_pane_hr, sizing_mode="stretch_both")
+#Header
+title = pn.Row(pn.layout.HSpacer(), text_title_student, text_title_day, text_title_session)  
+template.header.append(title)
+
+#Main
+#Il  numero di panel mostrati è uguale al numero di segnali da mostrare. Se ad esempio, nel file config EDA è 
+#disattivato, allora bisogna rimuovere il suo panel
+show_bokeh_pane = []
+if int(plot['EDA']) == 1:
+    show_bokeh_pane.append(bokeh_pane_eda)
+if int(plot['HR']) == 1:
+    show_bokeh_pane.append(bokeh_pane_hr)
+if int(plot['ACC']) == 1:
+    show_bokeh_pane.append(bokeh_pane_acc)
+
+size = 2
+for i in range(len(show_bokeh_pane)):
+    #12 è il massimo
+    template.main[(i*size):(i*size)+size, :] = show_bokeh_pane[i]
+
+
+
+
 
 template.show()

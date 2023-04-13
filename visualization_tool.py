@@ -60,7 +60,8 @@ def process(date, session):
 
     path_session = './temp/' + file_zip_name_student + '/Sessions/' + date + '/' + session
     
-
+    #x_range serve per muovere i grafici insieme sull'asse x
+    x_range = None
     progress_bar.value = 20
     #EDA
     if int(plot['EDA']) == 1:
@@ -106,8 +107,13 @@ def process(date, session):
             else:
                 color = '#FF0000'
             fig_eda.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
+        
+        if x_range is None:
+            x_range = fig_eda.x_range
+        
+        fig_eda.x_range = x_range
         bokeh_pane_eda.object = fig_eda
-    
+
     progress_bar.value = 70
     
     EDA, ACC, TEMP, df_popup = get_session(path_session)
@@ -118,15 +124,26 @@ def process(date, session):
     #ACC
     if int(plot['ACC']) == 1:
         df_acc  = process_acc(path_session)
-        bokeh_pane_acc.object = create_fig_line(df_acc, 'timestamp', 'acc_filter', 'Movement', '', 'ACC', df_popup)
-    
+        fig_acc = create_fig_line(df_acc, 'timestamp', 'acc_filter', 'Movement', '', 'ACC', df_popup)
+        
+        if x_range is None:
+            x_range = fig_acc.x_range
+        
+        fig_acc.x_range = x_range
+        
+        bokeh_pane_acc.object = fig_acc
     progress_bar.value = 99
     
     #HR
     if int(plot['HR']) == 1:
         df_hr = process_hr(path_session)   
-        bokeh_pane_hr.object = create_fig_line(df_hr, 'timestamp', 'hr', 'Heart Rate', 'BPM', 'HR', df_popup)
-    
+        fig_hr = create_fig_line(df_hr, 'timestamp', 'hr', 'Heart Rate', 'BPM', 'HR', df_popup)
+        if x_range is None:
+            x_range = fig_hr.x_range
+        
+        fig_hr.x_range = x_range
+        
+        bokeh_pane_hr.object = fig_hr
     progress_bar.visible = False
 
     print('Fine')

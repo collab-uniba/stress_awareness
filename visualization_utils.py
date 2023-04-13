@@ -165,9 +165,13 @@ def process_hr(path_session):
 
 
 def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
+ 
+
+
     fig_sign = figure(x_axis_type='datetime', plot_height=400,
                     title=title, x_axis_label='Time', y_axis_label=y_axis_label,
-                    sizing_mode='stretch_both')
+                    sizing_mode='stretch_both', tools = ['pan', 'xpan', 'box_zoom' ,'reset', 'save'])
+    #Rimozione della griglia dal background
     fig_sign.xgrid.grid_line_color = None
     fig_sign.ygrid.grid_line_color = None
 

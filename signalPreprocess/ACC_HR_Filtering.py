@@ -150,7 +150,7 @@ def android_filter(data):
     return acc_x, acc_y, acc_z
 
 
-def load_acc():
+def load_acc(path_session):
     '''
     CSV format (does not contain column names):
     ------------------------------------------
@@ -163,7 +163,7 @@ def load_acc():
     ------------------------------------------
     '''
 
-    data = pd.read_csv('temp\ACC.csv', header=None)
+    data = pd.read_csv(path_session + '/Data/ACC.csv', header=None)
 
     data = np.array(data)
 
@@ -174,7 +174,7 @@ def load_acc():
     return data, timestamp_0
 
 
-def load_hr():
+def load_hr(path_session):
     '''
     CSV format (does not contain column names):
     ------------------------------------------
@@ -186,7 +186,7 @@ def load_hr():
     ------------------------------------------
     '''
 
-    data = pd.read_csv('temp\HR.csv', header=None)
+    data = pd.read_csv(path_session + '/Data/HR.csv', header=None)
 
     timestamp_0 = data.iloc[0, 0]
     data = np.array(data.iloc[2:, 0])

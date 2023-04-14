@@ -337,7 +337,7 @@ def extract_popup_date(popup, timestamp):
 def create_directories_session_data(dir_path):
     #get all zip file names (sessions)
     zip_files_session = []
-    for file in os.listdir(dir_path  + '\\Data'):
+    for file in os.listdir(dir_path  + '/Data'):
         if file.endswith(".zip"):
             zip_files_session.append(file)
     

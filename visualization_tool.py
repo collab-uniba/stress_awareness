@@ -7,7 +7,7 @@ import io
 import zipfile
 import constant
 import pandas as pd
-from visualization_utils import classify_artifacts, create_directories_session_popup, create_directories_session_data, detect_peak, popup_process, process_data_popup, process_acc, process_hr, create_fig_line
+from visualization_utils import classify_artifacts, create_directories_session_popup, create_directories_session_data, detect_peak, get_session, popup_process, process_data_popup, process_acc, process_hr, create_fig_line, save_EDAs_filtered, save_data_filtered
 import panel as pn
 from panel.widgets import FileInput
 import configparser
@@ -73,31 +73,12 @@ def process(date, session):
     #EDA
     if int(plot['EDA']) == 1:
         bokeh_pane_eda.visible = True
-        EDA, ACC, TEMP, popup = get_session(path_session)
-        artifact_file = os.path.join(constant.artifact_output_path, "artifact_detected.csv")
 
+        data = pd.read_csv(path_session + '/Data/data_eda_filtered.csv')
+        df_merged = pd.read_csv(path_session + '/Data/df_merged_eda_filtered.csv')
+        df_data = pd.read_csv(path_session + '/Data/df_data_eda_filtered.csv')
+        df_popup = pd.read_csv(path_session + '/Data/df_popup_filtered.csv')
         
-        progress_bar.value = 30
-
-        output_file_path = os.path.join(constant.artifact_output_path, "result.csv")
-        classify_artifacts(EDA, ACC, TEMP, artifact_file, output_file_path)
-
-        progress_bar.value = 40
-        data = detect_peak(output_file_path, artifact_file, thresh, offset, start_WT, end_WT)
-        
-        progress_bar.value = 50
-        df_merged = process_data_popup(data, popup)
-        df_merged['timestamp'] = df_merged['timestamp'].apply(lambda x: x.time())
-
-        df_EDA = df_merged[
-            ['timestamp', 'activity', 'status_popup', 'valence', 'arousal', 'dominance', 'productivity', 'notes', 'filtered_eda']]
-       
-        df_data = df_EDA[df_EDA['status_popup'].isna()]
-        df_data = df_data[['timestamp', 'filtered_eda']]
-        df_data.reset_index(inplace=True, drop=True)
-        
-        df_popup = df_EDA[df_EDA['status_popup'] == 'POPUP_CLOSED']
-  
         fig_eda = create_fig_line(df_data, 'timestamp', 'filtered_eda', 'EDA with Peaks marked as vertical lines', 'μS', 'EDA', df_popup)
 
         # Add the peak markers to the figure
@@ -106,6 +87,10 @@ def process(date, session):
         df_peak = df_merged[['timestamp', 'peaks_plot', 'arousal']].set_index('timestamp')
         df_peak = df_peak.fillna(method='backfill').fillna(method='ffill').loc[~(df_peak['peaks_plot'] == 0)]
         
+
+        print('aaaa')
+        print(type(df_peak.iloc[0,0]))
+
         for t, a in df_peak.iterrows():
             if a['arousal'] == 'Low 🧘‍♀':
                 color = '#4DBD33'
@@ -123,19 +108,20 @@ def process(date, session):
 
     progress_bar.value = 70
     
-    EDA, ACC, TEMP, df_popup = get_session(path_session)
+    
+    
+    _, _, _, df_popup = get_session(path_session)
     df_popup['timestamp'] = pd.to_datetime(df_popup['timestamp'], utc=True)
     df_popup['timestamp'] = pd.to_datetime(df_popup['timestamp'].values, utc=True)
     df_popup['timestamp'] = df_popup['timestamp'].apply(lambda x: x.time())
     
+
     #ACC
     if int(plot['ACC']) == 1:
+        
         bokeh_pane_acc.visible = True
-        df_acc  = process_acc(path_session)
+        df_acc = pd.read_csv(path_session + '/Data/df_data_acc_filtered.csv')
 
-        #Empatica suggerisce di rimuovere i primi 10 secondi
-        df_acc = df_acc[10:]
-        df_acc.reset_index(inplace=True, drop=True)
         fig_acc = create_fig_line(df_acc, 'timestamp', 'acc_filter', 'Movement', 'Variation', 'ACC', df_popup)
         
         if x_range is None:
@@ -144,12 +130,12 @@ def process(date, session):
         fig_acc.x_range = x_range
         
         bokeh_pane_acc.object = fig_acc
-    progress_bar.value = 99
     
     #HR
     if int(plot['HR']) == 1:
         bokeh_pane_hr.visible = True
-        df_hr = process_hr(path_session)   
+        df_hr = pd.read_csv(path_session + '/Data/df_data_hr_filtered.csv')
+
         fig_hr = create_fig_line(df_hr, 'timestamp', 'hr', 'Heart Rate', 'BPM', 'HR', df_popup)
         if x_range is None:
             x_range = fig_hr.x_range
@@ -165,6 +151,9 @@ def file_upload_handler(event):
     global file_zip_name_student
     #Get file zip name
     file_zip_name_student = file_upload.filename.rsplit('.', 1)[0]
+
+    global path_days
+    path_days = './temp/' + file_zip_name_student + '/Sessions'
     #Se esiste già la cartella, la elimino
     if os.path.exists('./temp/'+file_zip_name_student):
         # Delete Folder code
@@ -188,14 +177,11 @@ def file_upload_handler(event):
     create_directories_session_data(dir_path)
     create_directories_session_popup(dir_path)
 
-    
-def get_session(path_session):    
-    EDA_df = pd.read_csv(path_session + '/Data/' + 'EDA.csv')
-    ACC_df = pd.read_csv(path_session + '/Data/' + 'ACC.csv')
-    TEMP_df = pd.read_csv(path_session + '/Data/' + 'TEMP.csv')
-    popup_df = popup_process(path_session + '/Popup/' + 'popup.csv') 
-
-    return EDA_df, ACC_df, TEMP_df, popup_df
+    thresh.disabled = False
+    offset.disabled = False
+    start_WT.disabled = False
+    end_WT.disabled = False
+    button_student.disabled = False
 
 
 
@@ -212,6 +198,7 @@ def start_process(event):
     session = select.value
     day = None
 
+    #Ricavare il giorno dalla sessione
     for key, values in groups.items():
         if str(session) in values:
             day = key
@@ -244,7 +231,6 @@ def num_session_to_timestamp(num_session):
 
 def create_select_sessions(event):
     global path_days
-    path_days = './temp/' + file_zip_name_student + '/Sessions'
     days = os.listdir(path_days)
     
     # Dizionario con key: giorno    value: lista di sessioni
@@ -265,15 +251,15 @@ def create_select_sessions(event):
 
     #Attivazione dei parametri dell'EDA e della scelta delle sessioni
     global thresh, offset, start_WT, end_WT, button_session
-    thresh.disabled = False
-    offset.disabled = False
-    start_WT.disabled = False
-    end_WT.disabled = False
-    select.disabled = False
-    button_session.disabled = False
+    
 
     global text_title_student
     text_title_student.value = 'Student: ' + file_zip_name_student
+    save_data_filtered(path_days, thresh, offset, start_WT, end_WT)
+
+    select.disabled = False
+    button_session.disabled = False
+
 
 
 #######                 #######
@@ -288,7 +274,7 @@ file_upload = FileInput(accept='.zip', sizing_mode='stretch_width')
 fig = file_upload.param.watch(file_upload_handler, 'value')
 
 #Button per confermare lo studente
-button_student = pn.widgets.Button(name='Confirm student', button_type='primary', sizing_mode='stretch_width')
+button_student = pn.widgets.Button(name='Confirm student', button_type='primary', disabled = True, sizing_mode='stretch_width')
 button_student.on_click(create_select_sessions)
 
 #Progress Bar
@@ -316,7 +302,7 @@ button_session.on_click(start_process)
 #Template
 template = pn.template.FastGridTemplate(
     site="EmoVizPhy", title = '',
-    sidebar=[file_upload, button_student, params_col, select, button_session, progress_bar],
+    sidebar=[file_upload, params_col, button_student, select, button_session, progress_bar],
     theme_toggle = False
 )
 

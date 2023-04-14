@@ -1,3 +1,4 @@
+import configparser
 import datetime
 import os
 import zipfile
@@ -163,6 +164,92 @@ def process_hr(path_session):
 
     return df_hr
 
+def get_session(path_session):    
+    EDA_df = pd.read_csv(path_session + '/Data/' + 'EDA.csv')
+    ACC_df = pd.read_csv(path_session + '/Data/' + 'ACC.csv')
+    TEMP_df = pd.read_csv(path_session + '/Data/' + 'TEMP.csv')
+    popup_df = popup_process(path_session + '/Popup/' + 'popup.csv') 
+
+    return EDA_df, ACC_df, TEMP_df, popup_df
+
+
+def save_EDAs_filtered(path_days, thresh, offset, start_WT, end_WT):
+    days = os.listdir(path_days)
+    for d in days:
+        path_sessions = path_days + '/' + d
+        sessions = os.listdir(path_sessions)
+        for s in sessions:
+            path_session = path_days + '/' + d + '/' + s
+            EDA, ACC, TEMP, popup = get_session(path_session + '/')
+            artifact_file = os.path.join(constant.artifact_output_path, "artifact_detected.csv")
+
+            output_file_path = os.path.join(constant.artifact_output_path, "result.csv")
+            classify_artifacts(EDA, ACC, TEMP, artifact_file, output_file_path)
+
+            data = detect_peak(output_file_path, artifact_file, thresh, offset, start_WT, end_WT)
+            
+            df_merged = process_data_popup(data, popup)
+            df_merged['timestamp'] = df_merged['timestamp'].apply(lambda x: x.time())
+
+            df_EDA = df_merged[
+                ['timestamp', 'activity', 'status_popup', 'valence', 'arousal', 'dominance', 'productivity', 'notes', 'filtered_eda']]
+        
+            df_data = df_EDA[df_EDA['status_popup'].isna()]
+            df_data = df_data[['timestamp', 'filtered_eda']]
+            df_data.reset_index(inplace=True, drop=True)
+            
+            df_popup = df_EDA[df_EDA['status_popup'] == 'POPUP_CLOSED']
+
+            data.to_csv(path_session + '/Data/data_eda_filtered.csv', index=False)
+            df_merged.to_csv(path_session + '/Data/df_merged_eda_filtered.csv', index=False)
+            df_data.to_csv(path_session + '/Data/df_data_eda_filtered.csv', index=False)
+            df_popup.to_csv(path_session + '/Data/df_popup_filtered.csv', index=False)
+
+
+def save_HRs_filtered(path_days):
+    days = os.listdir(path_days)
+    for d in days:
+        path_sessions = path_days + '/' + d
+        sessions = os.listdir(path_sessions)
+        for s in sessions:
+            path_session = path_days + '/' + d + '/' + s
+            df_hr = process_hr(path_session)  
+            df_hr.to_csv(path_session + '/Data/df_data_hr_filtered.csv', index=False)
+
+
+def save_ACCs_filtered(path_days):
+    days = os.listdir(path_days)
+    for d in days:
+        path_sessions = path_days + '/' + d
+        sessions = os.listdir(path_sessions)
+        for s in sessions:
+            path_session = path_days + '/' + d + '/' + s
+            df_acc  = process_acc(path_session)
+            
+            #Empatica suggerisce di rimuovere i primi 10 secondi
+            df_acc = df_acc[10:]
+            df_acc.reset_index(inplace=True, drop=True)
+            df_acc.to_csv(path_session + '/Data/df_data_acc_filtered.csv', index=False)
+
+
+
+def save_data_filtered(path_days, thresh, offset, start_WT, end_WT):
+    config_data = configparser.ConfigParser()
+    config_data.read("config.ini")
+    plot = config_data["PLOT"]
+    
+    if int(plot['EDA']) == 1:
+        save_EDAs_filtered(path_days, thresh, offset, start_WT, end_WT)
+        
+    if int(plot['HR']) == 1:
+        save_HRs_filtered(path_days)
+        
+    if int(plot['ACC']) == 1:
+        save_ACCs_filtered(path_days)
+        
+
+
+
 
 def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
  
@@ -176,13 +263,17 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
     fig_sign.ygrid.grid_line_color = None
 
 
-
     if sign != 'EDA':
-        df_sign['timestamp'] = df_sign['timestamp'].apply(lambda x: x.time())
-    
-   
-    
-
+       df_sign['timestamp'] = pd.to_datetime(df_sign['timestamp'], utc=True)
+       #df_popup['timestamp'] = pd.to_datetime(df_popup['timestamp'].values, utc=True)
+       df_sign['timestamp'] = df_sign['timestamp'].apply(lambda x: x.time())
+       df_popup[y] = 0
+       for i in range(df_popup.shape[0]):
+           timestamp = df_popup.loc[i,x]
+           temp = df_sign[df_sign[x] == timestamp]
+           temp.reset_index(inplace=True)
+           df_popup.loc[i, y] = temp.loc[0,y]
+        
     data_src_sign = ColumnDataSource(df_sign)
     line_plot_sign = fig_sign.line(x=x, y=y, source=data_src_sign)
     
@@ -199,14 +290,7 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
     
 
 
-    if sign != 'EDA':
-        df_popup[y] = 0
-        for i in range(df_popup.shape[0]):
-            timestamp = df_popup.loc[i,x]
-            temp = df_sign[df_sign[x] == timestamp]
-            temp.reset_index(inplace=True)
-            df_popup.loc[i, y] = temp.loc[0,y]
-        
+   
     
 
         

@@ -69,7 +69,6 @@ def process(date, session):
     
     #x_range serve per muovere i grafici insieme sull'asse x
     x_range = None
-    progress_bar.value = 20
     
     #EDA
     if int(plot['EDA']) == 1:
@@ -79,27 +78,29 @@ def process(date, session):
         df_merged = pd.read_csv(path_session + '/Data/df_merged_eda_filtered.csv')
         df_data = pd.read_csv(path_session + '/Data/df_data_eda_filtered.csv')
         df_popup = pd.read_csv(path_session + '/Data/df_popup_filtered.csv')
-        
-        fig_eda = create_fig_line(df_data, 'timestamp', 'filtered_eda', 'EDA with Peaks marked as vertical lines', 'μS', 'EDA', df_popup)
 
+
+        df_data['timestamp'] = pd.to_datetime(df_data['timestamp'], utc=True)
+        
+        df_data['timestamp'] = df_data['timestamp'].apply(lambda x: x.time())
+       
+    
+        fig_eda = create_fig_line(df_data, 'timestamp', 'filtered_eda', 'EDA with Peaks marked as vertical lines', 'μS', 'EDA', df_popup)
         # Add the peak markers to the figure
         peak_height = data['filtered_eda'].max() * 1.15
         df_merged['peaks_plot'] = df_merged['peaks'] * peak_height
         df_peak = df_merged[['timestamp', 'peaks_plot', 'arousal']].set_index('timestamp')
         df_peak = df_peak.fillna(method='backfill').fillna(method='ffill').loc[~(df_peak['peaks_plot'] == 0)]
-        
-
-        print('aaaa')
-        print(type(df_peak.iloc[0,0]))
-
+        df_peak.index = pd.to_datetime(df_peak.index.values)
         for t, a in df_peak.iterrows():
+            timestamp = t.time() 
             if a['arousal'] == 'Low 🧘‍♀':
                 color = '#4DBD33'
             elif a['arousal'] == 'Medium 😐':
                 color = '#FF8C00'
             else:
                 color = '#FF0000'
-            fig_eda.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
+            fig_eda.add_layout(Span(location=timestamp, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
         
         if x_range is None:
             x_range = fig_eda.x_range
@@ -107,7 +108,6 @@ def process(date, session):
         fig_eda.x_range = x_range
         bokeh_pane_eda.object = fig_eda
 
-    progress_bar.value = 70
     
     
     
@@ -122,8 +122,10 @@ def process(date, session):
         
         bokeh_pane_acc.visible = True
         df_acc = pd.read_csv(path_session + '/Data/df_data_acc_filtered.csv')
-
-        fig_acc = create_fig_line(df_acc, 'timestamp', 'acc_filter', 'Movement', 'Variation', 'ACC', df_popup)
+        df_acc['timestamp'] = pd.to_datetime(df_acc['timestamp'], utc=True)
+        df_acc['timestamp'] = df_acc['timestamp'].apply(lambda x: x.time())
+        
+        fig_acc = create_fig_line(df_acc, 'timestamp', 'acc_filter', 'Movement', 'Variation', 'MOV', df_popup)
         
         if x_range is None:
             x_range = fig_acc.x_range
@@ -136,6 +138,9 @@ def process(date, session):
     if int(plot['HR']) == 1:
         bokeh_pane_hr.visible = True
         df_hr = pd.read_csv(path_session + '/Data/df_data_hr_filtered.csv')
+        df_hr['timestamp'] = pd.to_datetime(df_hr['timestamp'], utc=True)
+        df_hr['timestamp'] = df_hr['timestamp'].apply(lambda x: x.time())
+        
 
         fig_hr = create_fig_line(df_hr, 'timestamp', 'hr', 'Heart Rate', 'BPM', 'HR', df_popup)
         if x_range is None:

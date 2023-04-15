@@ -1,6 +1,7 @@
 import configparser
 import datetime
 import os
+import re
 import zipfile
 import numpy as np
 import glob
@@ -187,23 +188,31 @@ def save_EDAs_filtered(path_days, thresh, offset, start_WT, end_WT):
             classify_artifacts(EDA, ACC, TEMP, artifact_file, output_file_path)
 
             data = detect_peak(output_file_path, artifact_file, thresh, offset, start_WT, end_WT)
+            data['timestamp'] = pd.to_datetime(data['timestamp']).dt.strftime("%Y-%m-%d %H:%M:%S.%f")
             
             df_merged = process_data_popup(data, popup)
-            df_merged['timestamp'] = df_merged['timestamp'].apply(lambda x: x.time())
-
+            df_merged['timestamp'] = pd.to_datetime(df_merged['timestamp']).dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+            data['timestamp'] = pd.to_datetime(data['timestamp']).dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+            
             df_EDA = df_merged[
                 ['timestamp', 'activity', 'status_popup', 'valence', 'arousal', 'dominance', 'productivity', 'notes', 'filtered_eda']]
-        
+            
             df_data = df_EDA[df_EDA['status_popup'].isna()]
             df_data = df_data[['timestamp', 'filtered_eda']]
             df_data.reset_index(inplace=True, drop=True)
             
             df_popup = df_EDA[df_EDA['status_popup'] == 'POPUP_CLOSED']
+            df_popup.reset_index(inplace=True, drop=True)
+            
 
             data.to_csv(path_session + '/Data/data_eda_filtered.csv', index=False)
             df_merged.to_csv(path_session + '/Data/df_merged_eda_filtered.csv', index=False)
             df_data.to_csv(path_session + '/Data/df_data_eda_filtered.csv', index=False)
             df_popup.to_csv(path_session + '/Data/df_popup_filtered.csv', index=False)
+
+
+
+
 
 
 def save_HRs_filtered(path_days):
@@ -252,28 +261,13 @@ def save_data_filtered(path_days, thresh, offset, start_WT, end_WT):
 
 
 def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
- 
-
-
     fig_sign = figure(x_axis_type='datetime', plot_height=400,
                     title=title, x_axis_label='Time', y_axis_label=y_axis_label,
                     sizing_mode='stretch_both', tools = ['pan', 'xpan', 'box_zoom' ,'reset', 'save'])
     #Rimozione della griglia dal background
     fig_sign.xgrid.grid_line_color = None
     fig_sign.ygrid.grid_line_color = None
-
-
-    if sign != 'EDA':
-       df_sign['timestamp'] = pd.to_datetime(df_sign['timestamp'], utc=True)
-       #df_popup['timestamp'] = pd.to_datetime(df_popup['timestamp'].values, utc=True)
-       df_sign['timestamp'] = df_sign['timestamp'].apply(lambda x: x.time())
-       df_popup[y] = 0
-       for i in range(df_popup.shape[0]):
-           timestamp = df_popup.loc[i,x]
-           temp = df_sign[df_sign[x] == timestamp]
-           temp.reset_index(inplace=True)
-           df_popup.loc[i, y] = temp.loc[0,y]
-        
+    
     data_src_sign = ColumnDataSource(df_sign)
     line_plot_sign = fig_sign.line(x=x, y=y, source=data_src_sign)
     
@@ -289,11 +283,27 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
     fig_sign.add_layout(Span(location=mean, dimension='width', line_color="red", line_alpha=0.5, line_width=1, line_dash='dashed'))
     
 
-
-   
-    
-
+    # Il seguente controllo è necessario per assegnare ai popup dei timestamp esistenti nei segnali (per la visualizzazione)
+    # Assegno i valori dei segnali ai popup nei relativi timestamp
+    df_temp = df_sign.copy()
+    df_temp['timestamp'] = df_temp['timestamp'].apply(lambda x: x.isoformat(timespec='seconds'))
+    df_temp['timestamp'] = pd.to_datetime(df_temp['timestamp']).dt.time 
+    df_popup[y] = 0
+    for i in range(df_popup.shape[0]):
+        timestamp = df_popup.loc[i,x]
+        # EDA ha il timestamp in un altro formato
+        if sign == 'EDA':
+            timestamp = datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S.%f').time()
         
+        temp = df_temp[df_temp[x] == timestamp]
+        temp.reset_index(inplace=True)
+
+        # Assegno il valore del segnale
+        df_popup.loc[i, y] = temp.loc[0,y]
+        # Assegno il valore del timestamp
+        df_popup.loc[i, x] = temp.loc[0,x]
+
+    df_popup['notes'] = df_popup[df_popup['notes'].isna()] = ''    
     datasrc = ColumnDataSource(df_popup)
     circle_plot = fig_sign.circle(name='report', x=x, y=y, source=datasrc, fill_color="yellow",
                                size=9)
@@ -303,19 +313,6 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
                                         ("Notes", "@notes"), ("Timestamp", "@timestamp{%H:%M:%S}"), (sign, "@"+y)],
                                 formatters={'@timestamp': 'datetime'})
     fig_sign.add_tools(circle_hover)
-
-    '''
-    if sign == 'EDA':
-        datasrc = ColumnDataSource(df_popup)
-        circle_plot = fig_sign.circle(name='report', x=x, y=y, source=datasrc, fill_color="yellow",
-                               size=9)
-        circle_hover = HoverTool(renderers=[circle_plot],
-                                tooltips=[("Activity", "@activity"), ("Valence", "@valence"), ("Arousal", "@arousal"),
-                                        ("Dominance", "@dominance"), ("Productivity", "@productivity"),
-                                        ("Notes", "@notes"), ("Timestamp", "@timestamp{%H:%M:%S}"), (sign, "@"+y)],
-                                formatters={'@timestamp': 'datetime'})
-        fig_sign.add_tools(circle_hover)
-    '''
     
     return fig_sign
 
@@ -345,19 +342,19 @@ def create_directories_session_data(dir_path):
         timestamp_session = int(session_name.rsplit('_')[0])
 
         date_time_session = datetime.datetime.fromtimestamp(timestamp_session)
-        dir_day = dir_path + '\\Sessions\\' + datetime.datetime.strftime(date_time_session, format='%d-%m-%Y')
+        dir_day = dir_path + '/Sessions/' + datetime.datetime.strftime(date_time_session, format='%d-%m-%Y')
           
         #time = str(date_time_session.time()).replace(':', '')
         # Lasciare il timestamp come nome delle cartelle. è necessario per capire quando è stato fatto un popup.
         # Ad esempio, se una sessione inizia alle 23.50 e un popup viene inserito alle 2.00 del giorno dopo,
         # potrebbe risultare difficile capire che il popup appartiene alla sessione del giorno prima.
-        dir_session = dir_day + '\\' + str(timestamp_session)
+        dir_session = dir_day + '/' + str(timestamp_session)
         if not os.path.exists(dir_session):
             os.makedirs(dir_session)
         
-        dir_data_session = dir_session + '\\' + 'Data\\'
+        dir_data_session = dir_session + '/' + 'Data/'
         
-        with zipfile.ZipFile(dir_path + '\\Data\\' + session_name, "r") as zip_ref:
+        with zipfile.ZipFile(dir_path + '/Data/' + session_name, "r") as zip_ref:
             zip_ref.extractall(dir_data_session)
 
 
@@ -367,7 +364,7 @@ def create_directories_session_popup(dir_path):
 
     #get all popup file names (sessions)
     popup_files_session = []
-    dir_popup = dir_path  + '\\Popup'
+    dir_popup = dir_path  + '/Popup'
     for file in os.listdir(dir_popup):
         if file.startswith("data"):
             #Replace è necessario per cercare il massimo nella stringa (per l'ultimo popup)
@@ -375,47 +372,48 @@ def create_directories_session_popup(dir_path):
     # This is the last popup
     popup_file_session_name = max(popup_files_session).replace('data (0).csv', 'data.csv')
     
-    all_popup = pd.read_csv(dir_popup + '\\' + popup_file_session_name, 
+    all_popup = pd.read_csv(dir_popup + '/' + popup_file_session_name, 
                             names=['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity',
                                 'status_popup', 'notes'])
     all_popup = all_popup[all_popup['status_popup'] == 'POPUP_CLOSED']
     all_popup.reset_index(inplace=True, drop=True)
     
 
+    
+
     # Salvataggio dei popup nelle relative sessioni
-    temp_df = pd.DataFrame(columns=all_popup.columns)
-    date_prev, session_prev = get_date_session_popup(all_popup.loc[0, 'timestamp'], dir_path + '\\Sessions')
-    path_popup = None
-    if date_prev is not None and session_prev is not None:
-        path_popup = dir_path + '\\Sessions\\' + date_prev + '\\' + session_prev + '\\Popup'
-    #temp_df = pd.concat([temp_df, all_popup.iloc[0, :]], axis=0).reset_index(drop=True)
-        temp_df.loc[0] = all_popup.iloc[0, :]
-  
-    for i in range(1, all_popup.shape[0]):
-        date_current, session_current = get_date_session_popup(all_popup.loc[i, 'timestamp'], dir_path + '\\Sessions')
-        if date_current is not None and session_current is not None:
-            if date_current != date_prev or session_current != session_prev:
-                if not os.path.exists(path_popup):
-                    os.mkdir(path_popup)
-                
-                temp_df.to_csv(path_popup + '\\popup.csv', index = False)
-                temp_df = pd.DataFrame(columns=all_popup.columns)
-                date_prev = date_current
-                session_prev = session_current
-                path_popup = dir_path + '\\Sessions\\' + date_prev + '\\' + session_prev + '\\Popup'
-               
-                
-            temp_df.loc[len(temp_df)] = all_popup.iloc[i, :]
-                
-               
-    if path_popup is not None:
+    temp_df = all_popup.copy()
+    temp_df['day'] = None
+    temp_df['session'] = None
+    # Assegnazione dei giorni di lavoro e delle sessioni ai popup
+    for i in range(all_popup.shape[0]):
+        date, session = get_date_session_popup(all_popup.loc[i, 'timestamp'], dir_path + '/Sessions')   
+        temp_df.loc[i, 'day'] = date
+        temp_df.loc[i, 'session'] = session
+
+    
+    # Rimozione dei popup senza una sessione
+    temp_df = temp_df[temp_df['session'].notnull()]
+    temp_df.reset_index(inplace=True, drop=True)
+    
+    # Salvataggio dei popup
+    sessions = set(temp_df['session'].values)
+    for s in sessions:
+        popup_session = temp_df[temp_df['session'] == s]
+        popup_session.reset_index(inplace=True, drop=True)
+        day = popup_session.loc[0, 'day']
+        path_popup = dir_path + '/Sessions/' + day + '/' + str(s) + '/Popup'
         if not os.path.exists(path_popup):
-                        os.mkdir(path_popup)    
-        temp_df.to_csv(path_popup + '\\popup.csv', index = False)
+            os.mkdir(path_popup)  
+        popup_session.drop(['day', 'session'], axis=1, inplace=True)
+        popup_session.to_csv(path_popup + '/popup.csv', index = False)            
+               
+    
    
 
 
 def get_date_session_popup(timestamp, path_sessions):
+    # Questo metodo calcola la data della sessione in cui è stato effettuato il popup
     # La ricerca viene effettuata nel seguente modo:
     # Si confronta il timestamp del popup con quello della prima sessione della stessa giornata del popup. 
     # Se il popup è stato effettuato prima, allora vuol dire che fa parte dell'ultima sessione della giornata precedente.
@@ -441,7 +439,7 @@ def get_date_session_popup(timestamp, path_sessions):
     if date_popup in dates:
         index_date_popup = dates.index(date_popup)
     
-        sessions = os.listdir(path_sessions + '\\' + date_popup)
+        sessions = os.listdir(path_sessions + '/' + date_popup)
         sessions.sort()
         
         # Il popup è stato fatto prima della prima sessione della giornata. In questo caso si ipotizza che
@@ -449,14 +447,14 @@ def get_date_session_popup(timestamp, path_sessions):
         if str(timestamp) < sessions[0]:
             #La sessione potrebbe essere l'ultima del giorno precedente
             index_date_popup -= 1
-            prev_date_time_session = date_time_popup - datetime.timedelta(days=1)
-            prev_date_session = datetime.datetime.strftime(prev_date_time_session, format='%d-%m-%Y')
             # Se nel giorno precedente a quello del popup è stata effettuata una sessione
             if dates[index_date_popup] == prev_date_session:
-                sessions = os.listdir(path_sessions + '\\' + dates[index_date_popup])
+                sessions = os.listdir(path_sessions + '/' + dates[index_date_popup])
                 sessions.sort()
-                session = sessions[-1]
-                real_date = dates[index_date_popup]
+                # Controlla se l'ultima sessione è iniziata prima del popup, altrimenti scarta il popup
+                if str(timestamp) > sessions[-1]:
+                    session = sessions[-1]
+                    real_date = dates[index_date_popup]
         else:
             #Cerco la sessione nello stesso giorno del popup
             real_date = dates[index_date_popup]
@@ -468,11 +466,13 @@ def get_date_session_popup(timestamp, path_sessions):
     #Questa condizione vale per quelle sessioni fatte a cavallo di due giorni e in cui nel secondo giorno non è stata
     #fatta un'altra sessione
     elif prev_date_session in dates:
-        sessions = os.listdir(path_sessions + '\\' + prev_date_session)
+        # Se nel giorno precedente a quello del popup è stata effettuata una sessione
+        sessions = os.listdir(path_sessions + '/' + prev_date_session)
         sessions.sort()
-        session = sessions[-1]
-        real_date = prev_date_session
-      
+        # Controlla se l'ultima sessione è iniziata prima del popup, altrimenti scarta il popup
+        if str(timestamp) > sessions[-1]:
+            session = sessions[-1]
+            real_date = prev_date_session
 
 
     return real_date, session

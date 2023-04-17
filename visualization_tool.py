@@ -35,10 +35,11 @@ text_title_session = pn.widgets.StaticText()
 
 
 
-file_zip_name_student = None 
+file_name_student = None
 current_session = None #Timestamp della sessione scelta
-path_days = None    #Path che porta ai giorni
-path_sessions = None #Path che porta alle sessioni
+path_student = None #Path dello studente
+path_days = None    #Path dei giorni di lavoro dello studente
+path_sessions = None #Path delle sessoni di un giorno di lavoro
 sessions = [] # Lista dei timestamp delle sessioni
 
 pn.extension()
@@ -64,11 +65,10 @@ def process(date, session):
         if s not in plot.keys():
             plot[s] = '0'
 
-    path_session = './temp/' + file_zip_name_student + '/Sessions/' + date + '/' + session
+    path_session = './temp/' + file_name_student + '/Sessions/' + date + '/' + session
     
     #x_range serve per muovere i grafici insieme sull'asse x
     x_range = None
-    progress_bar.value = 20
     
     #EDA
     if int(plot['EDA']) == 1:
@@ -78,27 +78,29 @@ def process(date, session):
         df_merged = pd.read_csv(path_session + '/Data/df_merged_eda_filtered.csv')
         df_data = pd.read_csv(path_session + '/Data/df_data_eda_filtered.csv')
         df_popup = pd.read_csv(path_session + '/Data/df_popup_filtered.csv')
-        
-        fig_eda = create_fig_line(df_data, 'timestamp', 'filtered_eda', 'EDA with Peaks marked as vertical lines', 'μS', 'EDA', df_popup)
 
+
+        df_data['timestamp'] = pd.to_datetime(df_data['timestamp'], utc=True)
+
+        df_data['timestamp'] = df_data['timestamp'].apply(lambda x: x.time())
+
+
+        fig_eda = create_fig_line(df_data, 'timestamp', 'filtered_eda', 'EDA with Peaks marked as vertical lines', 'μS', 'EDA', df_popup)
         # Add the peak markers to the figure
         peak_height = data['filtered_eda'].max() * 1.15
         df_merged['peaks_plot'] = df_merged['peaks'] * peak_height
         df_peak = df_merged[['timestamp', 'peaks_plot', 'arousal']].set_index('timestamp')
         df_peak = df_peak.fillna(method='backfill').fillna(method='ffill').loc[~(df_peak['peaks_plot'] == 0)]
-        
-
-        print('aaaa')
-        print(type(df_peak.iloc[0,0]))
-
+        df_peak.index = pd.to_datetime(df_peak.index.values)
         for t, a in df_peak.iterrows():
+            timestamp = t.time()
             if a['arousal'] == 'Low 🧘‍♀':
                 color = '#4DBD33'
             elif a['arousal'] == 'Medium 😐':
                 color = '#FF8C00'
             else:
                 color = '#FF0000'
-            fig_eda.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
+            fig_eda.add_layout(Span(location=timestamp, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
         
         if x_range is None:
             x_range = fig_eda.x_range
@@ -106,7 +108,6 @@ def process(date, session):
         fig_eda.x_range = x_range
         bokeh_pane_eda.object = fig_eda
 
-    progress_bar.value = 70
     
     
     
@@ -121,8 +122,10 @@ def process(date, session):
         
         bokeh_pane_acc.visible = True
         df_acc = pd.read_csv(path_session + '/Data/df_data_acc_filtered.csv')
+        df_acc['timestamp'] = pd.to_datetime(df_acc['timestamp'], utc=True)
+        df_acc['timestamp'] = df_acc['timestamp'].apply(lambda x: x.time())
 
-        fig_acc = create_fig_line(df_acc, 'timestamp', 'acc_filter', 'Movement', 'Variation', 'ACC', df_popup)
+        fig_acc = create_fig_line(df_acc, 'timestamp', 'acc_filter', 'Movement', 'Variation', 'MOV', df_popup)
         
         if x_range is None:
             x_range = fig_acc.x_range
@@ -135,6 +138,9 @@ def process(date, session):
     if int(plot['HR']) == 1:
         bokeh_pane_hr.visible = True
         df_hr = pd.read_csv(path_session + '/Data/df_data_hr_filtered.csv')
+        df_hr['timestamp'] = pd.to_datetime(df_hr['timestamp'], utc=True)
+        df_hr['timestamp'] = df_hr['timestamp'].apply(lambda x: x.time())
+
 
         fig_hr = create_fig_line(df_hr, 'timestamp', 'hr', 'Heart Rate', 'BPM', 'HR', df_popup)
         if x_range is None:
@@ -148,35 +154,30 @@ def process(date, session):
     print('Fine')
 
 def file_upload_handler(event):
-    global file_zip_name_student
-    #Get file zip name
-    file_zip_name_student = file_upload.filename.rsplit('.', 1)[0]
-
-    global path_days
-    path_days = './temp/' + file_zip_name_student + '/Sessions'
-    #Se esiste già la cartella, la elimino
-    if os.path.exists('./temp/'+file_zip_name_student):
-        # Delete Folder code
-            shutil.rmtree('./temp/'+file_zip_name_student)
-
-
     # Get the uploaded file
     _file = event.new
     _buffer = io.BytesIO(_file)
-    
     #Extract data and popup
     with zipfile.ZipFile(_buffer) as zip_file:
+        global file_name_student
+        #Get file name
+        file_name_student = zip_file.namelist()[0].rsplit('/')[0]
+        path_student = './temp/' + file_name_student
+
+        global path_days
+        path_days = path_student + '/Sessions'
+
+        #Se esiste già la cartella, la elimino
+        if os.path.exists(path_student):
+            # Delete Folder code
+            shutil.rmtree(path_student)
+
         for file in zip_file.namelist():
-            #temp_eda_timestamp = zip_file.extract(member=file, path ='./temp/')
-            if file.startswith(file_zip_name_student + '/Data/') or file.startswith(file_zip_name_student + '/Popup/'):
+            if file.startswith(file_name_student + '/Data/') or file.startswith(file_name_student + '/Popup/'):
                 zip_file.extract(member=file, path ='./temp/')
 
-
-
-    dir_path = r'.\\temp\\' + file_zip_name_student
-    
-    create_directories_session_data(dir_path)
-    create_directories_session_popup(dir_path)
+    create_directories_session_data(path_student)
+    create_directories_session_popup(path_student)
 
     thresh.disabled = False
     offset.disabled = False
@@ -255,7 +256,7 @@ def create_select_sessions(event):
     
 
     global text_title_student
-    text_title_student.value = 'Student: ' + file_zip_name_student
+    text_title_student.value = 'Student: ' + file_name_student
     save_data_filtered(path_days, thresh, offset, start_WT, end_WT)
 
     select.disabled = False

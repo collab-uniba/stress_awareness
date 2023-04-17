@@ -172,6 +172,7 @@ def file_upload_handler(event):
                 zip_file.extract(member=file, path ='./temp/')
 
 
+
     dir_path = r'.\\temp\\' + file_zip_name_student
     
     create_directories_session_data(dir_path)
@@ -330,4 +331,4 @@ for i in range(len(show_bokeh_pane)):
 
 
 
-template.show()
+template.show(port = 20000)

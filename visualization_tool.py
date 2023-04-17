@@ -330,6 +330,6 @@ for i in range(len(show_bokeh_pane)):
 
 
 
-
+print("Reach the application at http://localhost:20000")
 
 template.show(port = 20000)

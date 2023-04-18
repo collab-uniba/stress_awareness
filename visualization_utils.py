@@ -1,22 +1,16 @@
 import configparser
 import datetime
 import os
-import re
 import zipfile
 import numpy as np
-import glob
-import importlib
-import sys
 import constant
 import pandas as pd
 from bokeh.models import ColumnDataSource, HoverTool, Span
 from bokeh.plotting import figure
 
-
-sys.path.insert(1, './signalPreprocess')
-eda_artifact = importlib.import_module("EDA-Artifact-Detection-Script")
-eda_peak = importlib.import_module("EDA-Peak-Detection-Script")
-accelerometer = importlib.import_module("ACC_HR_Filtering")
+from signalPreprocess import EDA_Artifact_Detection_Script as eda_artifact
+from signalPreprocess import EDA_Peak_Detection_Script as eda_peak
+from signalPreprocess import ACC_HR_Filtering as accelerometer
 
 def classify_artifacts(eda, acc,temp, fullOutputPath, ouput_path):
     labels, data = eda_artifact.classify(constant.classifierList, eda, acc, temp)

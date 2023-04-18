@@ -5,9 +5,8 @@ import shutil
 from bokeh.models import Span
 import io
 import zipfile
-import constant
 import pandas as pd
-from visualization_utils import classify_artifacts, create_directories_session_popup, create_directories_session_data, detect_peak, get_session, popup_process, process_data_popup, process_acc, process_hr, create_fig_line, save_EDAs_filtered, save_data_filtered
+from visualization_utils import create_directories_session_popup, create_directories_session_data, get_session, create_fig_line, save_data_filtered
 import panel as pn
 from panel.widgets import FileInput
 import configparser
@@ -85,7 +84,7 @@ def process(date, session):
         df_data['timestamp'] = df_data['timestamp'].apply(lambda x: x.time())
        
     
-        fig_eda = create_fig_line(df_data, 'timestamp', 'filtered_eda', 'EDA with Peaks marked as vertical lines', 'μS', 'EDA', df_popup)
+        fig_eda = create_fig_line(df_data, 'timestamp', 'filtered_eda', 'Electrodermal Activity', 'μS', 'EDA', df_popup)
         # Add the peak markers to the figure
         peak_height = data['filtered_eda'].max() * 1.15
         df_merged['peaks_plot'] = df_merged['peaks'] * peak_height

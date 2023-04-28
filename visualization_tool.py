@@ -50,7 +50,7 @@ plot = config_data["PLOT"]
 
 
 
-def process(date, session):
+def visualize_session(date, session):
     global bokeh_pane_acc
     global bokeh_pane_eda
     global bokeh_pane_hr
@@ -186,20 +186,18 @@ def file_upload_handler(event):
 
 
 
-def start_process(event):
-    global bokeh_pane_acc
-    global bokeh_pane_eda
-    global bokeh_pane_hr
+def prepare_sessions(event):
+    #Questo metodo ricava il giorno e la sessione dal valore della select
     global progress_bar
-
     progress_bar.visible = True
-    global select
     
+    global select
     groups = select.groups
     session = select.value
+    
     day = None
 
-    #Ricavare il giorno dalla sessione
+    #Ricavare il giorno dalla stringa "Session #: HH:MM:SS"
     for key, values in groups.items():
         if str(session) in values:
             day = key
@@ -221,7 +219,7 @@ def start_process(event):
     text_title_day.value = 'Day: ' + day
     text_title_session.value = session
 
-    process(day, current_session)
+    visualize_session(day, current_session)
 
 
 def num_session_to_timestamp(num_session):
@@ -231,10 +229,11 @@ def num_session_to_timestamp(num_session):
     return sorted_list[num_session-1]
 
 def create_select_sessions(event):
+    #Questo metodo converte i timestamp delle sessioni nella stringa "Session #: HH:MM:SS"
     global path_days
     days = os.listdir(path_days)
     
-    # Dizionario con key: giorno    value: lista di sessioni
+    # Dizionario con key: giorno    value: lista di stringhe "Session #: HH:MM:SS"
     groups = {}
     for d in days:
         sessions = os.listdir(path_days + '/' + str(d))
@@ -261,6 +260,10 @@ def create_select_sessions(event):
     select.disabled = False
     button_session.disabled = False
 
+    #Visualizza la prima sessione
+    prepare_sessions(event)
+
+
 
 
 #######                 #######
@@ -275,7 +278,7 @@ file_upload = FileInput(accept='.zip', sizing_mode='stretch_width')
 fig = file_upload.param.watch(file_upload_handler, 'value')
 
 #Button per confermare lo studente
-button_student = pn.widgets.Button(name='Confirm student', button_type='primary', disabled = True, sizing_mode='stretch_width')
+button_student = pn.widgets.Button(name='Analyse biometrics', button_type='primary', disabled = True, sizing_mode='stretch_width')
 button_student.on_click(create_select_sessions)
 
 #Progress Bar
@@ -296,9 +299,9 @@ params_col = pn.Column(offset, thresh, start_WT, end_WT, visible = False, sizing
 if int(plot['EDA']) == 1:
     params_col.visible = True
 
-#Button per confermare la sessione
-button_session = pn.widgets.Button(name='Start Process', button_type='primary', disabled = True, sizing_mode='stretch_width')
-button_session.on_click(start_process)
+#Button per visualizzare la sessione
+button_session = pn.widgets.Button(name='Visualize session', button_type='primary', disabled = True, sizing_mode='stretch_width')
+button_session.on_click(prepare_sessions)
 
 #Template
 template = pn.template.FastGridTemplate(

@@ -34,7 +34,7 @@ text_title_session = pn.widgets.StaticText()
 
 
 
-file_name_student = None 
+file_name_student = None
 current_session = None #Timestamp della sessione scelta
 path_student = None #Path dello studente
 path_days = None    #Path dei giorni di lavoro dello studente
@@ -80,7 +80,7 @@ def process(date, session):
 
 
         df_data['timestamp'] = pd.to_datetime(df_data['timestamp'], utc=True)
-        
+
         df_data['timestamp'] = df_data['timestamp'].apply(lambda x: x.time())
        
     
@@ -92,7 +92,7 @@ def process(date, session):
         df_peak = df_peak.fillna(method='backfill').fillna(method='ffill').loc[~(df_peak['peaks_plot'] == 0)]
         df_peak.index = pd.to_datetime(df_peak.index.values)
         for t, a in df_peak.iterrows():
-            timestamp = t.time() 
+            timestamp = t.time()
             if a['arousal'] == 'Low 🧘‍♀':
                 color = '#4DBD33'
             elif a['arousal'] == 'Medium 😐':
@@ -123,7 +123,7 @@ def process(date, session):
         df_acc = pd.read_csv(path_session + '/Data/df_data_acc_filtered.csv')
         df_acc['timestamp'] = pd.to_datetime(df_acc['timestamp'], utc=True)
         df_acc['timestamp'] = df_acc['timestamp'].apply(lambda x: x.time())
-        
+
         fig_acc = create_fig_line(df_acc, 'timestamp', 'acc_filter', 'Movement', 'Variation', 'MOV', df_popup)
         
         if x_range is None:
@@ -139,7 +139,7 @@ def process(date, session):
         df_hr = pd.read_csv(path_session + '/Data/df_data_hr_filtered.csv')
         df_hr['timestamp'] = pd.to_datetime(df_hr['timestamp'], utc=True)
         df_hr['timestamp'] = df_hr['timestamp'].apply(lambda x: x.time())
-        
+
 
         fig_hr = create_fig_line(df_hr, 'timestamp', 'hr', 'Heart Rate', 'BPM', 'HR', df_popup)
         if x_range is None:
@@ -165,7 +165,7 @@ def file_upload_handler(event):
 
         global path_days
         path_days = path_student + '/Sessions'
-        
+
         #Se esiste già la cartella, la elimino
         if os.path.exists(path_student):
             # Delete Folder code
@@ -329,6 +329,6 @@ for i in range(len(show_bokeh_pane)):
 
 
 
+print("Reach the application at http://localhost:20000")
 
-
-template.show()
+template.show(port = 20000)

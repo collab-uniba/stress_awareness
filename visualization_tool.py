@@ -3,14 +3,15 @@ import os
 import re
 import shutil
 from bokeh.models import Span
-import io
-import zipfile
 import pandas as pd
 from visualization_utils import create_directories_session_popup, create_directories_session_data, get_session, create_fig_line, save_data_filtered
 import panel as pn
-from panel.widgets import FileInput
 import configparser
 from scipy.stats import rankdata
+import shutil
+from tkinter import Tk
+from tkinter.filedialog import askdirectory
+
 
 '''
  Please note that this script use scripts released by Taylor et al. that you can find here: https://github.com/MITMediaLabAffectiveComputing/eda-explorer
@@ -32,7 +33,18 @@ text_title_student = pn.widgets.StaticText()
 text_title_day = pn.widgets.StaticText()
 text_title_session = pn.widgets.StaticText()
 
+selected_path_directory = None
 
+#Parametri EDA
+thresh = pn.widgets.TextInput(name='Peak width', placeholder='default .02', value='.02', disabled = True, sizing_mode='stretch_width')
+offset = pn.widgets.TextInput(name='Peak start time', placeholder='default 1', value='1', disabled = True, sizing_mode='stretch_width')
+start_WT = pn.widgets.TextInput(name='Peak end time', placeholder='default 4', value='4', disabled = True, sizing_mode='stretch_width')
+end_WT = pn.widgets.TextInput(name='Minimum peak amplitude', placeholder='default 4', value='4', disabled = True, sizing_mode='stretch_width')
+params_col = pn.Column(offset, thresh, start_WT, end_WT, visible = False, sizing_mode='stretch_width')
+
+#Selezione della directory
+dir_input_btn = pn.widgets.Button(name="Select Data Directory", button_type='primary', sizing_mode='stretch_width', height=50)
+dir_input_btn.on_click(lambda x: select_directory())
 
 file_name_student = None
 current_session = None #Timestamp della sessione scelta
@@ -47,6 +59,66 @@ pn.extension()
 config_data = configparser.ConfigParser()
 config_data.read("config.ini")
 plot = config_data["PLOT"]
+
+
+
+
+
+
+
+
+
+
+
+
+def select_directory():
+    #Questo metodo permette di selezionare la cartella
+    global selected_path_directory
+    global text_title_student
+
+    root = Tk()
+    root.attributes('-topmost', True)
+    root.withdraw()
+    dirname = askdirectory()
+    if dirname:
+        selected_path_directory = dirname
+
+    prepare_files(selected_path_directory)
+    
+    global file_name_student
+    text_title_student.value = 'Directory ' + file_name_student + ' selected'
+    dir_input_btn.background = '#00A170'
+
+    dir_input_btn.aspect_ratio
+
+
+def prepare_files(path):
+    #Questo metodo copia e prepara i file nella cartella temp
+    global file_name_student
+    #Get file directory
+    file_name_student = os.path.basename(path)
+    path_student = './temp/' + file_name_student
+
+    global path_days
+    path_days = path_student + '/Sessions'
+
+    #Se esiste già la cartella in temp, la elimino
+    if os.path.exists(path_student):
+        # Delete Folders
+        shutil.rmtree(path_student)
+
+    os.mkdir(path_student)
+    shutil.copytree(path + '/Data', path_student + '/Data')
+    shutil.copytree(path + '/Popup', path_student + '/Popup')
+    
+    create_directories_session_data(path_student)
+    create_directories_session_popup(path_student)
+
+    thresh.disabled = False
+    offset.disabled = False
+    start_WT.disabled = False
+    end_WT.disabled = False
+    button_analyse.disabled = False
 
 
 
@@ -79,12 +151,11 @@ def visualize_session(date, session):
         df_popup = pd.read_csv(path_session + '/Data/df_popup_filtered.csv')
 
 
-        df_data['timestamp'] = pd.to_datetime(df_data['timestamp'], utc=True)
-
-        df_data['timestamp'] = df_data['timestamp'].apply(lambda x: x.time())
+        df_data['time'] = pd.to_datetime(df_data['time'], utc=True)
+        df_data['time'] = df_data['time'].apply(lambda x: x.time())
        
     
-        fig_eda = create_fig_line(df_data, 'timestamp', 'filtered_eda', 'Electrodermal Activity', 'μS', 'EDA', df_popup)
+        fig_eda = create_fig_line(df_data, 'time', 'filtered_eda', 'Electrodermal Activity', 'μS', 'EDA', df_popup)
         # Add the peak markers to the figure
         peak_height = data['filtered_eda'].max() * 1.15
         df_merged['peaks_plot'] = df_merged['peaks'] * peak_height
@@ -92,14 +163,14 @@ def visualize_session(date, session):
         df_peak = df_peak.fillna(method='backfill').fillna(method='ffill').loc[~(df_peak['peaks_plot'] == 0)]
         df_peak.index = pd.to_datetime(df_peak.index.values)
         for t, a in df_peak.iterrows():
-            timestamp = t.time()
+            time = t.time()
             if a['arousal'] == 'Low 🧘‍♀':
                 color = '#4DBD33'
             elif a['arousal'] == 'Medium 😐':
                 color = '#FF8C00'
             else:
                 color = '#FF0000'
-            fig_eda.add_layout(Span(location=timestamp, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
+            fig_eda.add_layout(Span(location=time, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
         
         if x_range is None:
             x_range = fig_eda.x_range
@@ -111,9 +182,9 @@ def visualize_session(date, session):
     
     
     _, _, _, df_popup = get_session(path_session)
-    df_popup['timestamp'] = pd.to_datetime(df_popup['timestamp'], utc=True)
-    df_popup['timestamp'] = pd.to_datetime(df_popup['timestamp'].values, utc=True)
-    df_popup['timestamp'] = df_popup['timestamp'].apply(lambda x: x.time())
+    df_popup['time'] = pd.to_datetime(df_popup['timestamp'], utc=True)
+    df_popup['time'] = pd.to_datetime(df_popup['timestamp'].values, utc=True)
+    df_popup['time'] = df_popup['timestamp'].apply(lambda x: x.time())
     
 
     #ACC
@@ -121,10 +192,10 @@ def visualize_session(date, session):
         
         bokeh_pane_acc.visible = True
         df_acc = pd.read_csv(path_session + '/Data/df_data_acc_filtered.csv')
-        df_acc['timestamp'] = pd.to_datetime(df_acc['timestamp'], utc=True)
-        df_acc['timestamp'] = df_acc['timestamp'].apply(lambda x: x.time())
+        df_acc['time'] = pd.to_datetime(df_acc['timestamp'], utc=True)
+        df_acc['time'] = df_acc['time'].apply(lambda x: x.time())
 
-        fig_acc = create_fig_line(df_acc, 'timestamp', 'acc_filter', 'Movement', 'Variation', 'MOV', df_popup)
+        fig_acc = create_fig_line(df_acc, 'time', 'acc_filter', 'Movement', 'Variation', 'MOV', df_popup)
         
         if x_range is None:
             x_range = fig_acc.x_range
@@ -137,11 +208,11 @@ def visualize_session(date, session):
     if int(plot['HR']) == 1:
         bokeh_pane_hr.visible = True
         df_hr = pd.read_csv(path_session + '/Data/df_data_hr_filtered.csv')
-        df_hr['timestamp'] = pd.to_datetime(df_hr['timestamp'], utc=True)
-        df_hr['timestamp'] = df_hr['timestamp'].apply(lambda x: x.time())
+        df_hr['time'] = pd.to_datetime(df_hr['timestamp'], utc=True)
+        df_hr['time'] = df_hr['time'].apply(lambda x: x.time())
 
 
-        fig_hr = create_fig_line(df_hr, 'timestamp', 'hr', 'Heart Rate', 'BPM', 'HR', df_popup)
+        fig_hr = create_fig_line(df_hr, 'time', 'hr', 'Heart Rate', 'BPM', 'HR', df_popup)
         if x_range is None:
             x_range = fig_hr.x_range
         
@@ -151,39 +222,6 @@ def visualize_session(date, session):
     progress_bar.visible = False
 
     print('Fine')
-
-def file_upload_handler(event):
-    # Get the uploaded file
-    _file = event.new
-    _buffer = io.BytesIO(_file)
-    #Extract data and popup
-    with zipfile.ZipFile(_buffer) as zip_file:
-        global file_name_student
-        #Get file name
-        file_name_student = zip_file.namelist()[0].rsplit('/')[0]
-        path_student = './temp/' + file_name_student
-
-        global path_days
-        path_days = path_student + '/Sessions'
-
-        #Se esiste già la cartella, la elimino
-        if os.path.exists(path_student):
-            # Delete Folder code
-            shutil.rmtree(path_student)
-
-        for file in zip_file.namelist():
-            if file.startswith(file_name_student + '/Data/') or file.startswith(file_name_student + '/Popup/'):
-                zip_file.extract(member=file, path ='./temp/')
-
-    create_directories_session_data(path_student)
-    create_directories_session_popup(path_student)
-
-    thresh.disabled = False
-    offset.disabled = False
-    start_WT.disabled = False
-    end_WT.disabled = False
-    button_student.disabled = False
-
 
 
 def prepare_sessions(event):
@@ -229,6 +267,20 @@ def num_session_to_timestamp(num_session):
     return sorted_list[num_session-1]
 
 def create_select_sessions(event):
+    global button_analyse
+    global offset
+    global thresh
+    global start_WT
+    global end_WT
+    global dir_input_btn
+    #Disattivo i bottoni
+
+    dir_input_btn.disabled = True
+    button_analyse.disabled = True
+    offset.disabled = True
+    thresh.disabled = True
+    start_WT.disabled = True 
+    end_WT.disabled = True
     #Questo metodo converte i timestamp delle sessioni nella stringa "Session #: HH:MM:SS"
     global path_days
     days = os.listdir(path_days)
@@ -250,20 +302,21 @@ def create_select_sessions(event):
     select.groups = groups
 
     #Attivazione dei parametri dell'EDA e della scelta delle sessioni
-    global thresh, offset, start_WT, end_WT, button_session
-    
-
     global text_title_student
-    text_title_student.value = 'Student: ' + file_name_student
+    text_title_student.value = 'Analysing ' + file_name_student
     save_data_filtered(path_days, thresh, offset, start_WT, end_WT)
-
-    select.disabled = False
-    button_session.disabled = False
 
     #Visualizza la prima sessione
     prepare_sessions(event)
 
-
+    dir_input_btn.disabled = False
+    button_analyse.disabled = False
+    select.disabled = False
+    button_session.disabled = False
+    offset.disabled = False
+    thresh.disabled = False
+    start_WT.disabled = False 
+    end_WT.disabled = False
 
 
 #######                 #######
@@ -272,14 +325,9 @@ def create_select_sessions(event):
 #######                 #######
 #######                 #######
 
-
-#Inserimento del file zip
-file_upload = FileInput(accept='.zip', sizing_mode='stretch_width')
-fig = file_upload.param.watch(file_upload_handler, 'value')
-
 #Button per confermare lo studente
-button_student = pn.widgets.Button(name='Analyse biometrics', button_type='primary', disabled = True, sizing_mode='stretch_width')
-button_student.on_click(create_select_sessions)
+button_analyse = pn.widgets.Button(name='Analyse biometrics', button_type='primary', disabled = True, sizing_mode='stretch_width')
+button_analyse.on_click(create_select_sessions)
 
 #Progress Bar
 progress_bar = pn.indicators.Progress(name = 'Progress', visible=False, active=True, sizing_mode='stretch_width')
@@ -288,27 +336,28 @@ progress_bar = pn.indicators.Progress(name = 'Progress', visible=False, active=T
 select = pn.widgets.Select(name='Select Session', options=sessions, disabled = True, sizing_mode='stretch_width')
 
 
-#Parametri EDA
-thresh = pn.widgets.TextInput(name='Peak width', placeholder='default .02', value='.02', disabled = True, sizing_mode='stretch_width')
-offset = pn.widgets.TextInput(name='Peak start time', placeholder='default 1', value='1', disabled = True, sizing_mode='stretch_width')
-start_WT = pn.widgets.TextInput(name='Peak end time', placeholder='default 4', value='4', disabled = True, sizing_mode='stretch_width')
-end_WT = pn.widgets.TextInput(name='Minimum peak amplitude', placeholder='default 4', value='4', disabled = True, sizing_mode='stretch_width')
-params_col = pn.Column(offset, thresh, start_WT, end_WT, visible = False, sizing_mode='stretch_width')
+#Button per visualizzare la sessione
+button_session = pn.widgets.Button(name='Visualize session', button_type='primary', disabled = True, sizing_mode='stretch_width')
+button_session.on_click(prepare_sessions)
+
 
 # Se EDA è attivato nel file di configurazione, vengono visualizzati i parametri per i picchi
 if int(plot['EDA']) == 1:
     params_col.visible = True
 
-#Button per visualizzare la sessione
-button_session = pn.widgets.Button(name='Visualize session', button_type='primary', disabled = True, sizing_mode='stretch_width')
-button_session.on_click(prepare_sessions)
-
 #Template
 template = pn.template.FastGridTemplate(
-    site="EmoVizPhy", title = '',
-    sidebar=[file_upload, params_col, button_student, select, button_session, progress_bar],
-    theme_toggle = False
+    title = 'EmoVizPhy',
+    sidebar=[dir_input_btn, 
+             params_col,
+             button_analyse,
+             select, 
+             button_session, 
+             progress_bar],
+    theme_toggle = False,
 )
+
+
 
 #Header
 title = pn.Row(pn.layout.HSpacer(), text_title_student, text_title_day, text_title_session)  

@@ -182,17 +182,17 @@ def save_EDAs_filtered(path_days, thresh, offset, start_WT, end_WT):
             classify_artifacts(EDA, ACC, TEMP, artifact_file, output_file_path)
 
             data = detect_peak(output_file_path, artifact_file, thresh, offset, start_WT, end_WT)
-            data['timestamp'] = pd.to_datetime(data['timestamp']).dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+            data['time'] = pd.to_datetime(data['timestamp']).dt.strftime("%Y-%m-%d %H:%M:%S.%f")
             
             df_merged = process_data_popup(data, popup)
-            df_merged['timestamp'] = pd.to_datetime(df_merged['timestamp']).dt.strftime("%Y-%m-%d %H:%M:%S.%f")
-            data['timestamp'] = pd.to_datetime(data['timestamp']).dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+            df_merged['time'] = pd.to_datetime(df_merged['timestamp']).dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+            data['time'] = pd.to_datetime(data['time']).dt.strftime("%Y-%m-%d %H:%M:%S.%f")
             
             df_EDA = df_merged[
-                ['timestamp', 'activity', 'status_popup', 'valence', 'arousal', 'dominance', 'productivity', 'notes', 'filtered_eda']]
+                ['time', 'activity', 'status_popup', 'valence', 'arousal', 'dominance', 'productivity', 'notes', 'filtered_eda']]
             
             df_data = df_EDA[df_EDA['status_popup'].isna()]
-            df_data = df_data[['timestamp', 'filtered_eda']]
+            df_data = df_data[['time', 'filtered_eda']]
             df_data.reset_index(inplace=True, drop=True)
             
             df_popup = df_EDA[df_EDA['status_popup'] == 'POPUP_CLOSED']
@@ -280,32 +280,40 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
     # Il seguente controllo è necessario per assegnare ai popup dei timestamp esistenti nei segnali (per la visualizzazione)
     # Assegno i valori dei segnali ai popup nei relativi timestamp
     df_temp = df_sign.copy()
-    df_temp['timestamp'] = df_temp['timestamp'].apply(lambda x: x.isoformat(timespec='seconds'))
-    df_temp['timestamp'] = pd.to_datetime(df_temp['timestamp']).dt.time 
-    df_popup[y] = 0
-    for i in range(df_popup.shape[0]):
-        timestamp = df_popup.loc[i,x]
+    df_popup_copy = df_popup.copy()
+ 
+    #Assegnazione dei valori y ai popup
+    df_popup_copy[y] = None
+    for i in range(df_popup_copy.shape[0]):
+        time = df_popup_copy.loc[i,x]
+        
         # EDA ha il timestamp in un altro formato
         if sign == 'EDA':
-            timestamp = datetime.datetime.strptime(timestamp, '%Y-%m-%d %H:%M:%S.%f').time()
+            time = datetime.datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f').time()
         
-        temp = df_temp[df_temp[x] == timestamp]
-        temp.reset_index(inplace=True)
-
-        # Assegno il valore del segnale
-        df_popup.loc[i, y] = temp.loc[0,y]
-        # Assegno il valore del timestamp
-        df_popup.loc[i, x] = temp.loc[0,x]
-
-    df_popup['notes'] = df_popup[df_popup['notes'].isna()] = ''    
-    datasrc = ColumnDataSource(df_popup)
+        
+        temp = df_temp[df_temp[x] == time]
+        if not temp.empty:
+            temp.reset_index(inplace=True, drop=True)
+           
+            # Assegno il valore del segnale
+            df_popup_copy.loc[i, y] = temp.loc[0,y]
+            # Assegno il valore del timestamp
+            df_popup_copy.loc[i, x] = temp.loc[0,x]
+    
+    #Se ci sono popup con time che non sono presenti nei segnali, non vengono considerati
+    df_popup_copy = df_popup_copy[df_popup_copy[y].notna()]
+    
+    df_popup_copy[df_popup_copy['notes'].isna()]['notes'] = ''    
+    
+    datasrc = ColumnDataSource(df_popup_copy)
     circle_plot = fig_sign.circle(name='report', x=x, y=y, source=datasrc, fill_color="yellow",
                                size=9)
     circle_hover = HoverTool(renderers=[circle_plot],
                                tooltips=[("Activity", "@activity"), ("Valence", "@valence"), ("Arousal", "@arousal"),
                                         ("Dominance", "@dominance"), ("Productivity", "@productivity"),
-                                        ("Notes", "@notes"), ("Timestamp", "@timestamp{%H:%M:%S}"), (sign, "@"+y)],
-                                formatters={'@timestamp': 'datetime'})
+                                        ("Notes", "@notes"), ("Time", "@time{%H:%M:%S}"), (sign, "@"+y)],
+                                formatters={'@time': 'datetime'})
     fig_sign.add_tools(circle_hover)
     
     return fig_sign

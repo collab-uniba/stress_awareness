@@ -120,23 +120,14 @@ def convert_to_discrete(frame, column):
     }
     frame[column] = frame[column].replace(replacements[column])
 
-def process_data_popup(data, popup):
-    data['timestamp'] = pd.to_datetime(data.index.values, utc=True).tz_convert('Europe/Berlin')
-    data['timestamp'] = data['timestamp'] + data['timestamp'].apply(lambda x: x.utcoffset())
-    
-    #Rimozione dei popup relativi agli altri giorni
-    data.reset_index(inplace=True, drop=True)
-    date = data.loc[0, 'timestamp']
-    popup = extract_popup_date(popup, date)
 
+def get_popup(path_session, date):
+    popup_df = popup_process(path_session + '/Popup/' + 'popup.csv')
+    popup = extract_popup_date(popup_df, date)
+    popup['time'] = pd.to_datetime(popup['timestamp'], utc=True)
+    popup['time'] = popup['time'].apply(lambda x: x.time())
+    return popup
 
-    popup['timestamp'] = pd.to_datetime(popup['timestamp'], utc=True)
-    data['hours'] = data['timestamp'].dt.hour
-    popup['hours'] = popup['timestamp'].dt.hour
-    df_merged = pd.merge(popup, data, on='timestamp', how='outer')
-    df_merged['timestamp'] = pd.to_datetime(df_merged['timestamp'].values, utc=True)
-    df_merged = df_merged.sort_values(by='timestamp')
-    return df_merged
 
 def process_acc(path_session):
     acc, timestamp_0 = accelerometer.load_acc(path_session)
@@ -159,51 +150,37 @@ def process_hr(path_session):
 
     return df_hr
 
-def get_session(path_session):    
+def get_session_EDA_ACC_TEMP(path_session):    
     EDA_df = pd.read_csv(path_session + '/Data/' + 'EDA.csv')
     ACC_df = pd.read_csv(path_session + '/Data/' + 'ACC.csv')
     TEMP_df = pd.read_csv(path_session + '/Data/' + 'TEMP.csv')
-    popup_df = popup_process(path_session + '/Popup/' + 'popup.csv') 
+     
 
-    return EDA_df, ACC_df, TEMP_df, popup_df
+    return EDA_df, ACC_df, TEMP_df
 
 
 def save_EDAs_filtered(path_days, thresh, offset, start_WT, end_WT):
     days = os.listdir(path_days)
     for d in days:
-        path_sessions = path_days + '/' + d
+        path_sessions = path_days + '/' + d + '/'
         sessions = os.listdir(path_sessions)
         for s in sessions:
-            path_session = path_days + '/' + d + '/' + s
-            EDA, ACC, TEMP, popup = get_session(path_session + '/')
+            path_session = path_days + '/' + d  + '/' + s
+            EDA, ACC, TEMP = get_session_EDA_ACC_TEMP(path_session)
             artifact_file = os.path.join(constant.artifact_output_path, "artifact_detected.csv")
-
             output_file_path = os.path.join(constant.artifact_output_path, "result.csv")
             classify_artifacts(EDA, ACC, TEMP, artifact_file, output_file_path)
-
+            
             data = detect_peak(output_file_path, artifact_file, thresh, offset, start_WT, end_WT)
-            data['time'] = pd.to_datetime(data['timestamp']).dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+            data.reset_index(inplace=True, drop=True)
+            data['timestamp'] = pd.to_datetime(data['timestamp'])\
+                                  .dt.tz_localize('UTC')\
+                                  .dt.tz_convert('Europe/Berlin')
             
-            df_merged = process_data_popup(data, popup)
-            df_merged['time'] = pd.to_datetime(df_merged['timestamp']).dt.strftime("%Y-%m-%d %H:%M:%S.%f")
-            data['time'] = pd.to_datetime(data['time']).dt.strftime("%Y-%m-%d %H:%M:%S.%f")
-            
-            df_EDA = df_merged[
-                ['time', 'activity', 'status_popup', 'valence', 'arousal', 'dominance', 'productivity', 'notes', 'filtered_eda']]
-            
-            df_data = df_EDA[df_EDA['status_popup'].isna()]
-            df_data = df_data[['time', 'filtered_eda']]
-            df_data.reset_index(inplace=True, drop=True)
-            
-            df_popup = df_EDA[df_EDA['status_popup'] == 'POPUP_CLOSED']
-            df_popup.reset_index(inplace=True, drop=True)
-            
-
+            #data['time'] = data['timestamp'].apply(lambda x: x.time())
+        
             data.to_csv(path_session + '/Data/data_eda_filtered.csv', index=False)
-            df_merged.to_csv(path_session + '/Data/df_merged_eda_filtered.csv', index=False)
-            df_data.to_csv(path_session + '/Data/df_data_eda_filtered.csv', index=False)
-            df_popup.to_csv(path_session + '/Data/df_popup_filtered.csv', index=False)
-
+            
 
 
 
@@ -259,6 +236,7 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
                     title=title, x_axis_label='Time', y_axis_label=y_axis_label,
                     sizing_mode='stretch_both', tools = ['pan', 'xpan', 'box_zoom' ,'reset', 'save'])
     #Rimozione della griglia dal background
+    
     fig_sign.xgrid.grid_line_color = None
     fig_sign.ygrid.grid_line_color = None
     
@@ -267,9 +245,10 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
     
 
     line_hover = HoverTool(renderers=[line_plot_sign],
-                            tooltips=[(sign, "@"+y), ("Time", "@timestamp{%H:%M:%S}")],
-                            formatters={'@timestamp': 'datetime'})
+                            tooltips=[(sign, "@"+y), ("Time", "@time{%H:%M:%S}")],
+                            formatters={'@time': 'datetime'})
     fig_sign.add_tools(line_hover)
+    
 
     
     #Mean
@@ -281,17 +260,12 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
     # Assegno i valori dei segnali ai popup nei relativi timestamp
     df_temp = df_sign.copy()
     df_popup_copy = df_popup.copy()
- 
+
     #Assegnazione dei valori y ai popup
     df_popup_copy[y] = None
     for i in range(df_popup_copy.shape[0]):
         time = df_popup_copy.loc[i,x]
-        
-        # EDA ha il timestamp in un altro formato
-        if sign == 'EDA':
-            time = datetime.datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f').time()
-        
-        
+      
         temp = df_temp[df_temp[x] == time]
         if not temp.empty:
             temp.reset_index(inplace=True, drop=True)
@@ -318,13 +292,13 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
     
     return fig_sign
 
-def extract_popup_date(popup, timestamp):
+def extract_popup_date(popup, date):
     #Rimuove i popup relativi agli altri giorni
-    date = timestamp.date()
-    popup.reset_index(inplace=True, drop=True)
     for i in range(popup.shape[0]):
+        
         date_temp = popup.loc[i, 'timestamp'].date()
-
+        date_temp = datetime.datetime.strftime(date_temp, "%d-%m-%Y")
+        
         if date_temp != date:
             popup.drop(i, inplace=True)
             

@@ -4,7 +4,7 @@ import re
 import shutil
 from bokeh.models import Span
 import pandas as pd
-from visualization_utils import create_directories_session_popup, create_directories_session_data, get_session, create_fig_line, save_data_filtered
+from visualization_utils import create_directories_session_popup, create_directories_session_data, get_popup, create_fig_line, save_data_filtered
 import panel as pn
 import configparser
 from scipy.stats import rankdata
@@ -50,7 +50,7 @@ file_name_student = None
 current_session = None #Timestamp della sessione scelta
 path_student = None #Path dello studente
 path_days = None    #Path dei giorni di lavoro dello studente
-path_sessions = None #Path delle sessoni di un giorno di lavoro
+path_sessions = None #Path delle sessioni di un giorno di lavoro
 sessions = [] # Lista dei timestamp delle sessioni
 
 pn.extension()
@@ -75,7 +75,7 @@ def select_directory():
     #Questo metodo permette di selezionare la cartella
     global selected_path_directory
     global text_title_student
-
+    
     root = Tk()
     root.attributes('-topmost', True)
     root.withdraw()
@@ -91,23 +91,48 @@ def select_directory():
 
     dir_input_btn.aspect_ratio
 
+    reset_widgets()
+    
+    
+    
+
+def reset_widgets():
+    global button_visualize
+    global bokeh_pane_eda, bokeh_pane_acc, bokeh_pane_hr
+    global select
+    button_visualize.disabled = True
+    bokeh_pane_eda.visible = False
+    bokeh_pane_acc.visible = False
+    bokeh_pane_hr.visible = False
+    
+    global text_title_day, text_title_session
+    text_title_day.value = ''
+    text_title_session.value = ''
+
+    select.disabled = True
+
+    
+
 
 def prepare_files(path):
     #Questo metodo copia e prepara i file nella cartella temp
     global file_name_student
     #Get file directory
     file_name_student = os.path.basename(path)
+
     path_student = './temp/' + file_name_student
 
     global path_days
     path_days = path_student + '/Sessions'
 
     #Se esiste già la cartella in temp, la elimino
-    if os.path.exists(path_student):
+    if os.path.exists('./temp/'):
         # Delete Folders
-        shutil.rmtree(path_student)
+        shutil.rmtree('./temp/')
 
+    os.mkdir('./temp/')
     os.mkdir(path_student)
+    
     shutil.copytree(path + '/Data', path_student + '/Data')
     shutil.copytree(path + '/Popup', path_student + '/Popup')
     
@@ -140,62 +165,49 @@ def visualize_session(date, session):
     
     #x_range serve per muovere i grafici insieme sull'asse x
     x_range = None
+    popup = get_popup(path_session , date)
+    
+    
     
     #EDA
     if int(plot['EDA']) == 1:
         bokeh_pane_eda.visible = True
 
         data = pd.read_csv(path_session + '/Data/data_eda_filtered.csv')
-        df_merged = pd.read_csv(path_session + '/Data/df_merged_eda_filtered.csv')
-        df_data = pd.read_csv(path_session + '/Data/df_data_eda_filtered.csv')
-        df_popup = pd.read_csv(path_session + '/Data/df_popup_filtered.csv')
-
-
-        df_data['time'] = pd.to_datetime(df_data['time'], utc=True)
-        df_data['time'] = df_data['time'].apply(lambda x: x.time())
-       
-    
-        fig_eda = create_fig_line(df_data, 'time', 'filtered_eda', 'Electrodermal Activity', 'μS', 'EDA', df_popup)
+        data['time'] = pd.to_datetime(data['timestamp']).dt.time
+        data = data[['time', 'filtered_eda', 'peaks']]
+        
+        fig_eda = create_fig_line(data, 'time', 'filtered_eda', 'Electrodermal Activity', 'μS', 'EDA', popup)
+        
         # Add the peak markers to the figure
         peak_height = data['filtered_eda'].max() * 1.15
-        df_merged['peaks_plot'] = df_merged['peaks'] * peak_height
-        df_peak = df_merged[['timestamp', 'peaks_plot', 'arousal']].set_index('timestamp')
-        df_peak = df_peak.fillna(method='backfill').fillna(method='ffill').loc[~(df_peak['peaks_plot'] == 0)]
-        df_peak.index = pd.to_datetime(df_peak.index.values)
-        for t, a in df_peak.iterrows():
-            time = t.time()
-            if a['arousal'] == 'Low 🧘‍♀':
-                color = '#4DBD33'
-            elif a['arousal'] == 'Medium 😐':
-                color = '#FF8C00'
-            else:
-                color = '#FF0000'
-            fig_eda.add_layout(Span(location=time, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
+        data['peaks_plot'] = data['peaks'] * peak_height
+        time_peaks = data[data['peaks_plot'] != 0]['time']
+        
+        for t in time_peaks:
+            color = '#4DBD33'
+            fig_eda.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
         
         if x_range is None:
             x_range = fig_eda.x_range
         
         fig_eda.x_range = x_range
         bokeh_pane_eda.object = fig_eda
+    
+    
+    
 
     
-    
-    
-    _, _, _, df_popup = get_session(path_session)
-    df_popup['time'] = pd.to_datetime(df_popup['timestamp'], utc=True)
-    df_popup['time'] = pd.to_datetime(df_popup['timestamp'].values, utc=True)
-    df_popup['time'] = df_popup['timestamp'].apply(lambda x: x.time())
-    
-
     #ACC
     if int(plot['ACC']) == 1:
         
         bokeh_pane_acc.visible = True
         df_acc = pd.read_csv(path_session + '/Data/df_data_acc_filtered.csv')
-        df_acc['time'] = pd.to_datetime(df_acc['timestamp'], utc=True)
-        df_acc['time'] = df_acc['time'].apply(lambda x: x.time())
-
-        fig_acc = create_fig_line(df_acc, 'time', 'acc_filter', 'Movement', 'Variation', 'MOV', df_popup)
+        
+        df_acc['time'] = pd.to_datetime(df_acc['timestamp'], utc=True).dt.time
+        df_acc = df_acc[['time', 'acc_filter']]
+        
+        fig_acc = create_fig_line(df_acc, 'time', 'acc_filter', 'Movement', 'Variation', 'MOV', popup)
         
         if x_range is None:
             x_range = fig_acc.x_range
@@ -208,17 +220,18 @@ def visualize_session(date, session):
     if int(plot['HR']) == 1:
         bokeh_pane_hr.visible = True
         df_hr = pd.read_csv(path_session + '/Data/df_data_hr_filtered.csv')
-        df_hr['time'] = pd.to_datetime(df_hr['timestamp'], utc=True)
-        df_hr['time'] = df_hr['time'].apply(lambda x: x.time())
+        
+        df_hr['time'] = pd.to_datetime(df_hr['timestamp'], utc=True).dt.time
+        df_hr = df_hr[['time', 'hr']]
 
-
-        fig_hr = create_fig_line(df_hr, 'time', 'hr', 'Heart Rate', 'BPM', 'HR', df_popup)
+        fig_hr = create_fig_line(df_hr, 'time', 'hr', 'Heart Rate', 'BPM', 'HR', popup)
         if x_range is None:
             x_range = fig_hr.x_range
         
         fig_hr.x_range = x_range
         
         bokeh_pane_hr.object = fig_hr
+    
     progress_bar.visible = False
 
     print('Fine')
@@ -256,9 +269,9 @@ def prepare_sessions(event):
     global text_title_day, text_title_student
     text_title_day.value = 'Day: ' + day
     text_title_session.value = session
-
+    
     visualize_session(day, current_session)
-
+    
 
 def num_session_to_timestamp(num_session):
     global sessions
@@ -267,6 +280,10 @@ def num_session_to_timestamp(num_session):
     return sorted_list[num_session-1]
 
 def create_select_sessions(event):
+
+
+
+
     global button_analyse
     global offset
     global thresh
@@ -312,7 +329,7 @@ def create_select_sessions(event):
     dir_input_btn.disabled = False
     button_analyse.disabled = False
     select.disabled = False
-    button_session.disabled = False
+    button_visualize.disabled = False
     offset.disabled = False
     thresh.disabled = False
     start_WT.disabled = False 
@@ -337,8 +354,8 @@ select = pn.widgets.Select(name='Select Session', options=sessions, disabled = T
 
 
 #Button per visualizzare la sessione
-button_session = pn.widgets.Button(name='Visualize session', button_type='primary', disabled = True, sizing_mode='stretch_width')
-button_session.on_click(prepare_sessions)
+button_visualize = pn.widgets.Button(name='Visualize session', button_type='primary', disabled = True, sizing_mode='stretch_width')
+button_visualize.on_click(prepare_sessions)
 
 
 # Se EDA è attivato nel file di configurazione, vengono visualizzati i parametri per i picchi
@@ -352,7 +369,7 @@ template = pn.template.FastGridTemplate(
              params_col,
              button_analyse,
              select, 
-             button_session, 
+             button_visualize, 
              progress_bar],
     theme_toggle = False,
 )
@@ -382,5 +399,5 @@ for i in range(len(show_bokeh_pane)):
 
 
 print("Reach the application at http://localhost:20000")
-
+#template.show()
 template.show(port = 20000)

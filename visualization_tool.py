@@ -165,7 +165,9 @@ def visualize_session(date, session):
     
     #x_range serve per muovere i grafici insieme sull'asse x
     x_range = None
-    popup = get_popup(path_session , date)
+    popup = None
+    if os.path.exists(path_session + '/Popup'):
+        popup = get_popup(path_session , date)
     
     
     

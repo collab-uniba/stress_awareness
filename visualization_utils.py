@@ -256,39 +256,40 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
     fig_sign.add_layout(Span(location=mean, dimension='width', line_color="red", line_alpha=0.5, line_width=1, line_dash='dashed'))
     
 
-    # Il seguente controllo è necessario per assegnare ai popup dei timestamp esistenti nei segnali (per la visualizzazione)
-    # Assegno i valori dei segnali ai popup nei relativi timestamp
-    df_temp = df_sign.copy()
-    df_popup_copy = df_popup.copy()
+    if df_popup is not None:
+        # Il seguente controllo è necessario per assegnare ai popup dei timestamp esistenti nei segnali (per la visualizzazione)
+        # Assegno i valori dei segnali ai popup nei relativi timestamp
+        df_temp = df_sign.copy()
+        df_popup_copy = df_popup.copy()
 
-    #Assegnazione dei valori y ai popup
-    df_popup_copy[y] = None
-    for i in range(df_popup_copy.shape[0]):
-        time = df_popup_copy.loc[i,x]
-      
-        temp = df_temp[df_temp[x] == time]
-        if not temp.empty:
-            temp.reset_index(inplace=True, drop=True)
-           
-            # Assegno il valore del segnale
-            df_popup_copy.loc[i, y] = temp.loc[0,y]
-            # Assegno il valore del timestamp
-            df_popup_copy.loc[i, x] = temp.loc[0,x]
-    
-    #Se ci sono popup con time che non sono presenti nei segnali, non vengono considerati
-    df_popup_copy = df_popup_copy[df_popup_copy[y].notna()]
-    
-    df_popup_copy[df_popup_copy['notes'].isna()]['notes'] = ''    
-    
-    datasrc = ColumnDataSource(df_popup_copy)
-    circle_plot = fig_sign.circle(name='report', x=x, y=y, source=datasrc, fill_color="yellow",
-                               size=9)
-    circle_hover = HoverTool(renderers=[circle_plot],
-                               tooltips=[("Activity", "@activity"), ("Valence", "@valence"), ("Arousal", "@arousal"),
-                                        ("Dominance", "@dominance"), ("Productivity", "@productivity"),
-                                        ("Notes", "@notes"), ("Time", "@time{%H:%M:%S}"), (sign, "@"+y)],
-                                formatters={'@time': 'datetime'})
-    fig_sign.add_tools(circle_hover)
+        #Assegnazione dei valori y ai popup
+        df_popup_copy[y] = None
+        for i in range(df_popup_copy.shape[0]):
+            time = df_popup_copy.loc[i,x]
+        
+            temp = df_temp[df_temp[x] == time]
+            if not temp.empty:
+                temp.reset_index(inplace=True, drop=True)
+            
+                # Assegno il valore del segnale
+                df_popup_copy.loc[i, y] = temp.loc[0,y]
+                # Assegno il valore del timestamp
+                df_popup_copy.loc[i, x] = temp.loc[0,x]
+        
+        #Se ci sono popup con time che non sono presenti nei segnali, non vengono considerati
+        df_popup_copy = df_popup_copy[df_popup_copy[y].notna()]
+        
+        df_popup_copy[df_popup_copy['notes'].isna()]['notes'] = ''    
+        
+        datasrc = ColumnDataSource(df_popup_copy)
+        circle_plot = fig_sign.circle(name='report', x=x, y=y, source=datasrc, fill_color="yellow",
+                                size=9)
+        circle_hover = HoverTool(renderers=[circle_plot],
+                                tooltips=[("Activity", "@activity"), ("Valence", "@valence"), ("Arousal", "@arousal"),
+                                            ("Dominance", "@dominance"), ("Productivity", "@productivity"),
+                                            ("Notes", "@notes"), ("Time", "@time{%H:%M:%S}"), (sign, "@"+y)],
+                                    formatters={'@time': 'datetime'})
+        fig_sign.add_tools(circle_hover)
     
     return fig_sign
 
@@ -339,50 +340,47 @@ def create_directories_session_popup(dir_path):
     # In questo metodo si considera solo l'ultimo file
 
     #get all popup file names (sessions)
-    popup_files_session = []
     dir_popup = dir_path  + '/Popup'
-    for file in os.listdir(dir_popup):
-        if file.startswith("data"):
-            #Replace è necessario per cercare il massimo nella stringa (per l'ultimo popup)
-            popup_files_session.append(file.replace('data.csv', 'data (0).csv'))
-    # This is the last popup
-    popup_file_session_name = max(popup_files_session).replace('data (0).csv', 'data.csv')
-    
-    all_popup = pd.read_csv(dir_popup + '/' + popup_file_session_name, 
-                            names=['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity',
-                                'status_popup', 'notes'])
-    all_popup = all_popup[all_popup['status_popup'] == 'POPUP_CLOSED']
-    all_popup.reset_index(inplace=True, drop=True)
-    
+    if len(os.listdir(dir_popup)) > 0:
+        all_popup = pd.DataFrame(columns = ['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity',
+                                   'status_popup', 'notes'])
+        for file in os.listdir(dir_popup):
+            popup = pd.read_csv(dir_popup + '/' + file, header=None)
+            popup.columns = ['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity',
+                                   'status_popup', 'notes']
+            all_popup = pd.concat([all_popup, popup])
 
-    
+        all_popup = all_popup[all_popup['status_popup'] == 'POPUP_CLOSED']
+        all_popup.drop_duplicates(inplace=True)
+        all_popup.reset_index(inplace=True, drop=True)
+        
 
-    # Salvataggio dei popup nelle relative sessioni
-    temp_df = all_popup.copy()
-    temp_df['day'] = None
-    temp_df['session'] = None
-    # Assegnazione dei giorni di lavoro e delle sessioni ai popup
-    for i in range(all_popup.shape[0]):
-        date, session = get_date_session_popup(all_popup.loc[i, 'timestamp'], dir_path + '/Sessions')   
-        temp_df.loc[i, 'day'] = date
-        temp_df.loc[i, 'session'] = session
+        # Salvataggio dei popup nelle relative sessioni
+        temp_df = all_popup.copy()
+        temp_df['day'] = None
+        temp_df['session'] = None
+        # Assegnazione dei giorni di lavoro e delle sessioni ai popup
+        for i in range(all_popup.shape[0]):
+            date, session = get_date_session_popup(all_popup.loc[i, 'timestamp'], dir_path + '/Sessions')   
+            temp_df.loc[i, 'day'] = date
+            temp_df.loc[i, 'session'] = session
 
-    
-    # Rimozione dei popup senza una sessione
-    temp_df = temp_df[temp_df['session'].notnull()]
-    temp_df.reset_index(inplace=True, drop=True)
-    
-    # Salvataggio dei popup
-    sessions = set(temp_df['session'].values)
-    for s in sessions:
-        popup_session = temp_df[temp_df['session'] == s]
-        popup_session.reset_index(inplace=True, drop=True)
-        day = popup_session.loc[0, 'day']
-        path_popup = dir_path + '/Sessions/' + day + '/' + str(s) + '/Popup'
-        if not os.path.exists(path_popup):
-            os.mkdir(path_popup)  
-        popup_session.drop(['day', 'session'], axis=1, inplace=True)
-        popup_session.to_csv(path_popup + '/popup.csv', index = False)            
+        
+        # Rimozione dei popup senza una sessione
+        temp_df = temp_df[temp_df['session'].notnull()]
+        temp_df.reset_index(inplace=True, drop=True)
+        
+        # Salvataggio dei popup
+        sessions = set(temp_df['session'].values)
+        for s in sessions:
+            popup_session = temp_df[temp_df['session'] == s]
+            popup_session.reset_index(inplace=True, drop=True)
+            day = popup_session.loc[0, 'day']
+            path_popup = dir_path + '/Sessions/' + day + '/' + str(s) + '/Popup'
+            if not os.path.exists(path_popup):
+                os.mkdir(path_popup)  
+            popup_session.drop(['day', 'session'], axis=1, inplace=True)
+            popup_session.to_csv(path_popup + '/popup.csv', index = False)            
                
     
    

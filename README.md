@@ -23,6 +23,7 @@ Once the command is executed, you will be successfully authenticated to the remo
 4. Run the following command:
 
 `docker pull ghcr.io/collab-uniba/stressawareness:arm64-latest` (for mac m1)
+
 `docker pull ghcr.io/collab-uniba/stressawareness:win64-latest` (for windows 64 bit)
 
 This command will download the latest version of the stressawareness image from the GitHub Container Registry to your local system.
@@ -30,7 +31,8 @@ This command will download the latest version of the stressawareness image from 
 5. Run the following command:
 
 `docker run --rm -it -p 20000:20000 ghcr.io/collab-uniba/stressawareness:arm64-latest` (for mac m1)
-`docker run --rm -it -p 20000:20000 ghcr.io/collab-uniba/stressawareness:arm64-latest` (for windows 64 bit)
+
+`docker run --rm -it -p 20000:20000 ghcr.io/collab-uniba/stressawareness:win64-latest` (for windows 64 bit)
 
 
 This command will run the stressawareness image in a container and provide you with the link to use EmoVizPhy in your browser.

@@ -4,7 +4,7 @@ import re
 import shutil
 from bokeh.models import Span
 import pandas as pd
-from visualization_utils import create_directories_session_popup, create_directories_session_data, get_popup, create_fig_line, save_data_filtered
+from visualization_utils import create_directories_session_popup, create_directories_session_data, get_popup, create_fig_line, read_param_EDA, save_data_filtered
 import panel as pn
 import configparser
 from scipy.stats import rankdata
@@ -35,13 +35,6 @@ text_title_session = pn.widgets.StaticText()
 
 selected_path_directory = None
 
-#Parametri EDA
-thresh = pn.widgets.TextInput(name='Peak width', placeholder='default .02', value='.02', disabled = True, sizing_mode='stretch_width')
-offset = pn.widgets.TextInput(name='Peak start time', placeholder='default 1', value='1', disabled = True, sizing_mode='stretch_width')
-start_WT = pn.widgets.TextInput(name='Peak end time', placeholder='default 4', value='4', disabled = True, sizing_mode='stretch_width')
-end_WT = pn.widgets.TextInput(name='Minimum peak amplitude', placeholder='default 4', value='4', disabled = True, sizing_mode='stretch_width')
-params_col = pn.Column(offset, thresh, start_WT, end_WT, visible = False, sizing_mode='stretch_width')
-
 #Selezione della directory
 dir_input_btn = pn.widgets.Button(name="Select Data Directory", button_type='primary', sizing_mode='stretch_width', height=50)
 dir_input_btn.on_click(lambda x: select_directory())
@@ -55,11 +48,9 @@ sessions = [] # Lista dei timestamp delle sessioni
 
 pn.extension()
 
-
 config_data = configparser.ConfigParser()
 config_data.read("config.ini")
 plot = config_data["PLOT"]
-
 
 
 
@@ -139,10 +130,6 @@ def prepare_files(path):
     create_directories_session_data(path_student)
     create_directories_session_popup(path_student)
 
-    thresh.disabled = False
-    offset.disabled = False
-    start_WT.disabled = False
-    end_WT.disabled = False
     button_analyse.disabled = False
 
 
@@ -154,6 +141,9 @@ def visualize_session(date, session):
     global progress_bar
 
     global plot
+    
+    
+
     
     #Check for missing signals in config
     signals = ['EDA', 'HR', 'ACC']
@@ -185,14 +175,41 @@ def visualize_session(date, session):
         peak_height = data['filtered_eda'].max() * 1.15
         data['peaks_plot'] = data['peaks'] * peak_height
         time_peaks = data[data['peaks_plot'] != 0]['time']
-        
-        for t in time_peaks:
-            color = '#4DBD33'
-            fig_eda.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
-        
+    
+        if popup is not None:
+            temp = popup.copy()
+            temp['time']= temp['time'].astype(str)
+            temp['time'] = pd.to_datetime(temp['time'], format='%H:%M:%S')
+            
+            for t in time_peaks:
+                #Estrazione dell'ultimo popup fatto precedentemente
+                t_datetime = datetime.datetime.strptime(t.isoformat(timespec="seconds"), '%H:%M:%S')
+                #Considero solo i popup fatti prima del picco
+                prev_popup = temp[temp['time'] < t_datetime]
+                #Considero solo i popup fatti nei precedenti 30 minuti
+                diff = (t_datetime - prev_popup['time']) < datetime.timedelta(minutes=30)
+
+                #Assegnazione 
+                arousal = None
+                if not diff.empty:
+                    #Considero l'ultimo popup fatto nei precedenti 30 minuti
+                    row_popup = temp[diff]
+                    row_popup = row_popup.sort_values(by=['time'], ascending=False)
+                    arousal = row_popup.loc[0, 'arousal']
+                if arousal is None:
+                    color = '#808080' #Grigio
+                elif arousal == 'Low 😔':
+                    color = '#4DBD33' #Verde
+                elif arousal == 'Medium 😐':
+                    color = '#FF8C00' #Arancione
+                else:
+                    color = '#FF0000' #Rosso
+
+                fig_eda.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
+            
         if x_range is None:
             x_range = fig_eda.x_range
-        
+            
         fig_eda.x_range = x_range
         bokeh_pane_eda.object = fig_eda
     
@@ -282,24 +299,15 @@ def num_session_to_timestamp(num_session):
     return sorted_list[num_session-1]
 
 def create_select_sessions(event):
-
-
-
+    offset, thresh, start_WT, end_WT = read_param_EDA()
 
     global button_analyse
-    global offset
-    global thresh
-    global start_WT
-    global end_WT
     global dir_input_btn
-    #Disattivo i bottoni
 
+    #Disattivo i bottoni
     dir_input_btn.disabled = True
     button_analyse.disabled = True
-    offset.disabled = True
-    thresh.disabled = True
-    start_WT.disabled = True 
-    end_WT.disabled = True
+
     #Questo metodo converte i timestamp delle sessioni nella stringa "Session #: HH:MM:SS"
     global path_days
     days = os.listdir(path_days)
@@ -320,7 +328,6 @@ def create_select_sessions(event):
     global select
     select.groups = groups
 
-    #Attivazione dei parametri dell'EDA e della scelta delle sessioni
     global text_title_student
     text_title_student.value = 'Analysing ' + file_name_student
     save_data_filtered(path_days, thresh, offset, start_WT, end_WT)
@@ -332,10 +339,6 @@ def create_select_sessions(event):
     button_analyse.disabled = False
     select.disabled = False
     button_visualize.disabled = False
-    offset.disabled = False
-    thresh.disabled = False
-    start_WT.disabled = False 
-    end_WT.disabled = False
 
 
 #######                 #######
@@ -360,15 +363,10 @@ button_visualize = pn.widgets.Button(name='Visualize session', button_type='prim
 button_visualize.on_click(prepare_sessions)
 
 
-# Se EDA è attivato nel file di configurazione, vengono visualizzati i parametri per i picchi
-if int(plot['EDA']) == 1:
-    params_col.visible = True
-
 #Template
 template = pn.template.FastGridTemplate(
     title = 'EmoVizPhy',
     sidebar=[dir_input_btn, 
-             params_col,
              button_analyse,
              select, 
              button_visualize, 

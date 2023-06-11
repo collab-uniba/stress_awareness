@@ -5,7 +5,7 @@ import zipfile
 import numpy as np
 import constant
 import pandas as pd
-from bokeh.models import ColumnDataSource, HoverTool, Span
+from bokeh.models import ColumnDataSource, HoverTool, Span, DatetimeTickFormatter
 from bokeh.plotting import figure
 
 from signalPreprocess import EDA_Artifact_Detection_Script as eda_artifact
@@ -52,7 +52,7 @@ def detect_peak(ouput_path, artifact_path, thresh, offset, start_WT, end_WT):
     fullOutputPath = r"./temp" + "/result_peak.csv"
 
     return eda_peak.calcPeakFeatures(
-        data, fullOutputPath, float(offset.value), float(thresh.value), int(start_WT.value), int(end_WT.value)
+        data, fullOutputPath, int(offset), float(thresh), int(start_WT), int(end_WT)
     )
 
 def get_datetime_filename(column):
@@ -228,15 +228,25 @@ def save_data_filtered(path_days, thresh, offset, start_WT, end_WT):
         save_ACCs_filtered(path_days)
         
 
+def read_param_EDA():
+    config_data = configparser.ConfigParser()
+    config_data.read("config.ini")
 
+    params = config_data['PARAMETERS PEAKS EDA']
+    offset = int(params['OFFSET'])
+    thresh = float(params['THRESH'])
+    start_WT = int(params['START_WT'])
+    end_WT = int(params['END_WT'])
+
+    return offset, thresh, start_WT, end_WT
 
 
 def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
-    fig_sign = figure(x_axis_type='datetime', plot_height=400,
+    fig_sign = figure(plot_height=400,
                     title=title, x_axis_label='Time', y_axis_label=y_axis_label,
                     sizing_mode='stretch_both', tools = ['pan', 'xpan', 'box_zoom' ,'reset', 'save'])
+   
     #Rimozione della griglia dal background
-    
     fig_sign.xgrid.grid_line_color = None
     fig_sign.ygrid.grid_line_color = None
     
@@ -249,7 +259,7 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
                             formatters={'@time': 'datetime'})
     fig_sign.add_tools(line_hover)
     
-
+    
     
     #Mean
     mean = df_sign.loc[:, y].mean()
@@ -290,7 +300,14 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
                                             ("Notes", "@notes"), ("Time", "@time{%H:%M:%S}"), (sign, "@"+y)],
                                     formatters={'@time': 'datetime'})
         fig_sign.add_tools(circle_hover)
-    
+
+    # Configurazione dei valori visualizzati sotto l'ascissa nel formato HH:MM
+    fig_sign.xaxis.formatter = DatetimeTickFormatter(
+        hours=['%H:%M'],
+        minutes=['%H:%M'],
+        seconds=['%H:%M'],
+        minsec=['%H:%M']
+        )
     return fig_sign
 
 def extract_popup_date(popup, date):

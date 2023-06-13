@@ -4,7 +4,7 @@ import numpy as np
 SAMPLE_RATE = 8
 
 
-def findPeaks(data, offset, start_WT, end_WT, thres=0, sampleRate=SAMPLE_RATE):
+def findPeaks(data, offset, start_WT, end_WT, thresh=0, sampleRate=SAMPLE_RATE):
     '''
         This function finds the peaks of an EDA signal and returns basic properties.
         Also, peak_end is assumed to be no later than the start ofeh lo  the next peak. (Is this okay??)
@@ -16,7 +16,7 @@ def findPeaks(data, offset, start_WT, end_WT, thres=0, sampleRate=SAMPLE_RATE):
                     the derivative must be negative after a peak.
         start_WT:    maximum number of seconds before the apex of a peak that is the "start" of the peak
         end_WT:      maximum number of seconds after the apex of a peak that is the "rec.t/2" of the peak, 50% of amp
-        thres:       the minimum uS change required to register as a peak, defaults as 0 (i.e. all peaks count)
+        thresh:       the minimum uS change required to register as a peak, defaults as 0 (i.e. all peaks count)
         sampleRate:  number of samples per second, default=8
 
         ********* OUTPUTS **********
@@ -73,7 +73,7 @@ def findPeaks(data, offset, start_WT, end_WT, thres=0, sampleRate=SAMPLE_RATE):
                 rise_time[i] = start_WT
 
             # Check if amplitude is too small
-            if thres > 0 and (data['filtered_eda'].iloc[i] - data['filtered_eda'][peak_start_times[i]]) < thres:
+            if thresh > 0 and (data['filtered_eda'].iloc[i] - data['filtered_eda'][peak_start_times[i]]) < thresh:
                 peaks[i] = 0
                 peak_start[i] = 0
                 peak_start_times[i] = ''

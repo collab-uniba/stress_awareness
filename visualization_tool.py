@@ -191,7 +191,8 @@ def visualize_session(date, session):
 
                 #Assegnazione 
                 arousal = None
-                if not diff.empty:
+                #Se esiste un popup fatto nei precedenti 30 minuti di almeno un picco 
+                if True in diff.values:
                     #Considero l'ultimo popup fatto nei precedenti 30 minuti
                     row_popup = temp[diff]
                     row_popup = row_popup.sort_values(by=['time'], ascending=False)
@@ -399,5 +400,5 @@ for i in range(len(show_bokeh_pane)):
 
 
 print("Reach the application at http://localhost:20000")
-#template.show()
-template.show(port = 20000)
+template.show()
+#template.show(port = 20000)

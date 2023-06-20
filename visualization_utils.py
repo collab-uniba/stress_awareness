@@ -83,9 +83,8 @@ def calculate_date_time(timestamp_0, hz, num_rows):
     for i in range(1, num_rows):
         data_time_temp = data_times[i-1] + datetime.timedelta(seconds = off_set)
         data_times.append(data_time_temp)
-    date = str(data_times[0].date())
-    times = [t.strftime("%H:%M:%S") for t in data_times]
-    return date, times
+    return data_times
+
 
 
 def popup_process(path_popup):
@@ -132,21 +131,19 @@ def get_popup(path_session, date):
 def process_acc(path_session):
     acc, timestamp_0 = accelerometer.load_acc(path_session)
     acc_filter = accelerometer.empatica_filter(acc)
-    date, time = calculate_date_time(timestamp_0,1,len(acc_filter))
+    timestamp = calculate_date_time(timestamp_0,1,len(acc_filter))
     # create a df with the filtered acc data and date and time
     df_acc = pd.DataFrame(acc_filter, columns=['acc_filter'])
-    df_acc['time'] = time
-    df_acc['date'] = date
-    df_acc['timestamp'] = pd.to_datetime(df_acc['date'] + ' ' + df_acc['time'])
+    df_acc['timestamp'] = timestamp
+    df_acc['timestamp'] = pd.to_datetime(df_acc['timestamp'])
     return df_acc
 
 def process_hr(path_session):
     hr, timestamp_0_hr = accelerometer.load_hr(path_session)
-    date, time = calculate_date_time(timestamp_0_hr, 1, len(hr))
+    timestamp = calculate_date_time(timestamp_0_hr, 1, len(hr))
     df_hr = pd.DataFrame(hr, columns=['hr'])
-    df_hr['time'] = time
-    df_hr['date'] = date
-    df_hr['timestamp'] = pd.to_datetime(df_hr['date'] + ' ' + df_hr['time'])
+    df_hr['timestamp'] = timestamp
+    df_hr['timestamp'] = pd.to_datetime(df_hr['timestamp'])
 
     return df_hr
 
@@ -177,8 +174,7 @@ def save_EDAs_filtered(path_days, thresh, offset, start_WT, end_WT):
                                   .dt.tz_localize('UTC')\
                                   .dt.tz_convert('Europe/Berlin')
             
-            #data['time'] = data['timestamp'].apply(lambda x: x.time())
-        
+           
             data.to_csv(path_session + '/Data/data_eda_filtered.csv', index=False)
             
 
@@ -242,14 +238,13 @@ def read_param_EDA():
 
 
 def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
-    fig_sign = figure(plot_height=400,
+    fig_sign = figure(plot_height=400, x_axis_type='datetime',
                     title=title, x_axis_label='Time', y_axis_label=y_axis_label,
                     sizing_mode='stretch_both', tools = ['pan', 'xpan', 'box_zoom' ,'reset', 'save'])
-   
+    
     #Rimozione della griglia dal background
     fig_sign.xgrid.grid_line_color = None
     fig_sign.ygrid.grid_line_color = None
-    
     data_src_sign = ColumnDataSource(df_sign)
     line_plot_sign = fig_sign.line(x=x, y=y, source=data_src_sign)
     
@@ -265,18 +260,16 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
     mean = df_sign.loc[:, y].mean()
     fig_sign.add_layout(Span(location=mean, dimension='width', line_color="red", line_alpha=0.5, line_width=1, line_dash='dashed'))
     
-
+    
     if df_popup is not None:
         # Il seguente controllo è necessario per assegnare ai popup dei timestamp esistenti nei segnali (per la visualizzazione)
         # Assegno i valori dei segnali ai popup nei relativi timestamp
         df_temp = df_sign.copy()
         df_popup_copy = df_popup.copy()
-
         #Assegnazione dei valori y ai popup
         df_popup_copy[y] = None
         for i in range(df_popup_copy.shape[0]):
-            time = df_popup_copy.loc[i,x]
-        
+            time = df_popup_copy.loc[i,'timestamp']
             temp = df_temp[df_temp[x] == time]
             if not temp.empty:
                 temp.reset_index(inplace=True, drop=True)
@@ -303,11 +296,17 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
 
     # Configurazione dei valori visualizzati sotto l'ascissa nel formato HH:MM
     fig_sign.xaxis.formatter = DatetimeTickFormatter(
-        hours=['%H:%M'],
-        minutes=['%H:%M'],
-        seconds=['%H:%M'],
-        minsec=['%H:%M']
-        )
+        hourmin = ['%H:%M'],
+        hours = ['%H:%M'],
+        days = ['%H:%M'],
+        months = ['%H:%M'],
+        years = ['%H:%M'],
+        minutes = ['%H:%M'],
+        seconds = ['%H:%M'],
+        minsec = ['%H:%M'],
+        microseconds = ['%H:%M'],
+        milliseconds = ['%H:%M']
+    )
     return fig_sign
 
 def extract_popup_date(popup, date):

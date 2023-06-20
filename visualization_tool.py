@@ -1,4 +1,5 @@
 import datetime
+from datetime import date as dt
 import os
 import re
 import shutil
@@ -166,7 +167,12 @@ def visualize_session(date, session):
         bokeh_pane_eda.visible = True
 
         data = pd.read_csv(path_session + '/Data/data_eda_filtered.csv')
-        data['time'] = pd.to_datetime(data['timestamp']).dt.time
+        
+        data['time'] = pd.to_datetime(data['timestamp'])
+        data['time']=data['time'].values.astype('datetime64[s]')
+        data['time']=data['time'].dt.tz_localize('UTC').dt.tz_convert('Europe/Berlin')
+        data['time']=data['time'].dt.tz_localize(None)
+
         data = data[['time', 'filtered_eda', 'peaks']]
         
         fig_eda = create_fig_line(data, 'time', 'filtered_eda', 'Electrodermal Activity', 'μS', 'EDA', popup)
@@ -179,25 +185,23 @@ def visualize_session(date, session):
         if popup is not None:
             temp = popup.copy()
             temp['time']= temp['time'].astype(str)
-            temp['time'] = pd.to_datetime(temp['time'], format='%H:%M:%S')
-            
+            temp['time'] = pd.to_datetime(temp['time'], format='%H:%M:%S').dt.time
             for t in time_peaks:
                 #Estrazione dell'ultimo popup fatto precedentemente
-                t_datetime = datetime.datetime.strptime(t.isoformat(timespec="seconds"), '%H:%M:%S')
-                #Considero solo i popup fatti prima del picco
-                prev_popup = temp[temp['time'] < t_datetime]
-                #Considero solo i popup fatti nei precedenti 30 minuti
-                diff = (t_datetime - prev_popup['time']) < datetime.timedelta(minutes=30)
 
+                #Considero solo i popup fatti prima del picco
+                prev_popup = temp[temp['time'] < t.time()]
                 #Assegnazione 
                 arousal = None
-                #Se esiste un popup fatto nei precedenti 30 minuti di almeno un picco 
-                if True in diff.values:
+                #Considero solo i popup fatti nei precedenti 30 minuti
+                if not prev_popup.empty:
                     #Considero l'ultimo popup fatto nei precedenti 30 minuti
-                    row_popup = prev_popup[diff.values]
-                    row_popup.reset_index(inplace=True, drop=True)
-                    row_popup = row_popup.sort_values(by=['time'], ascending=False)
-                    arousal = row_popup.loc[0, 'arousal']
+                    prev_popup.reset_index(inplace=True, drop=True)
+                    prev_popup = prev_popup.sort_values(by=['time'], ascending=False)
+                    flag = datetime.datetime.combine(dt.today(), t.time()) - datetime.datetime.combine(dt.today(), prev_popup.loc[0, 'time']) < datetime.timedelta(minutes=30)
+                    if flag:
+                        arousal = prev_popup.loc[0, 'arousal']
+
                 if arousal is None:
                     color = '#808080' #Grigio
                 elif arousal == 'Low 😔':
@@ -224,10 +228,13 @@ def visualize_session(date, session):
         
         bokeh_pane_acc.visible = True
         df_acc = pd.read_csv(path_session + '/Data/df_data_acc_filtered.csv')
-        
-        df_acc['time'] = pd.to_datetime(df_acc['timestamp'], utc=True).dt.time
+       
+        df_acc['time'] = pd.to_datetime(df_acc['timestamp'])
+        df_acc['time']=df_acc['time'].values.astype('datetime64[s]')
+
         df_acc = df_acc[['time', 'acc_filter']]
         
+
         fig_acc = create_fig_line(df_acc, 'time', 'acc_filter', 'Movement', 'Variation', 'MOV', popup)
         
         if x_range is None:
@@ -241,8 +248,9 @@ def visualize_session(date, session):
     if int(plot['HR']) == 1:
         bokeh_pane_hr.visible = True
         df_hr = pd.read_csv(path_session + '/Data/df_data_hr_filtered.csv')
-        
-        df_hr['time'] = pd.to_datetime(df_hr['timestamp'], utc=True).dt.time
+        df_hr['time'] = pd.to_datetime(df_hr['timestamp'])
+        df_hr['time']=df_hr['time'].values.astype('datetime64[s]')
+    
         df_hr = df_hr[['time', 'hr']]
 
         fig_hr = create_fig_line(df_hr, 'time', 'hr', 'Heart Rate', 'BPM', 'HR', popup)

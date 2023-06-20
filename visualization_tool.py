@@ -194,7 +194,8 @@ def visualize_session(date, session):
                 #Se esiste un popup fatto nei precedenti 30 minuti di almeno un picco 
                 if True in diff.values:
                     #Considero l'ultimo popup fatto nei precedenti 30 minuti
-                    row_popup = temp[diff]
+                    row_popup = prev_popup[diff.values]
+                    row_popup.reset_index(inplace=True, drop=True)
                     row_popup = row_popup.sort_values(by=['time'], ascending=False)
                     arousal = row_popup.loc[0, 'arousal']
                 if arousal is None:

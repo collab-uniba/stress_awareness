@@ -282,7 +282,9 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
         #Se ci sono popup con time che non sono presenti nei segnali, non vengono considerati
         df_popup_copy = df_popup_copy[df_popup_copy[y].notna()]
         
-        df_popup_copy[df_popup_copy['notes'].isna()]['notes'] = ''    
+        #Sostituzione dei valori nulli nelle note con stringa vuota. Necessario per la visualizzazione sull'HoverTool
+        df_popup_copy['notes'] = df_popup_copy['notes'].astype(str)
+        df_popup_copy['notes'] = df_popup_copy[df_popup_copy['notes'] == 'nan'] = ''
         
         datasrc = ColumnDataSource(df_popup_copy)
         circle_plot = fig_sign.circle(name='report', x=x, y=y, source=datasrc, fill_color="yellow",
@@ -290,7 +292,7 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
         circle_hover = HoverTool(renderers=[circle_plot],
                                 tooltips=[("Activity", "@activity"), ("Valence", "@valence"), ("Arousal", "@arousal"),
                                             ("Dominance", "@dominance"), ("Productivity", "@productivity"),
-                                            ("Notes", "@notes"), ("Time", "@time{%H:%M:%S}"), (sign, "@"+y)],
+                                            ("Note", "@notes"), ("Time", "@time{%H:%M:%S}"), (sign, "@"+y)],
                                     formatters={'@time': 'datetime'})
         fig_sign.add_tools(circle_hover)
 

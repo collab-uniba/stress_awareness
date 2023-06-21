@@ -187,17 +187,16 @@ def visualize_session(date, session):
             temp['time']= temp['time'].astype(str)
             temp['time'] = pd.to_datetime(temp['time'], format='%H:%M:%S').dt.time
             for t in time_peaks:
-                #Estrazione dell'ultimo popup fatto precedentemente
-
                 #Considero solo i popup fatti prima del picco
                 prev_popup = temp[temp['time'] < t.time()]
-                #Assegnazione 
+                
+                #Assegnazione arousal
                 arousal = None
                 #Considero solo i popup fatti nei precedenti 30 minuti
                 if not prev_popup.empty:
                     #Considero l'ultimo popup fatto nei precedenti 30 minuti
-                    prev_popup.reset_index(inplace=True, drop=True)
                     prev_popup = prev_popup.sort_values(by=['time'], ascending=False)
+                    prev_popup.reset_index(inplace=True, drop=True)
                     flag = datetime.datetime.combine(dt.today(), t.time()) - datetime.datetime.combine(dt.today(), prev_popup.loc[0, 'time']) < datetime.timedelta(minutes=30)
                     if flag:
                         arousal = prev_popup.loc[0, 'arousal']

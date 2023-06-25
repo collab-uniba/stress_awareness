@@ -4,7 +4,7 @@ import numpy as np
 SAMPLE_RATE = 8
 
 
-def findPeaks(data, offset, start_WT, end_WT, thres=0, sampleRate=SAMPLE_RATE):
+def findPeaks(data, offset, start_WT, end_WT, thresh=0, sampleRate=SAMPLE_RATE):
     '''
         This function finds the peaks of an EDA signal and returns basic properties.
         Also, peak_end is assumed to be no later than the start ofeh lo  the next peak. (Is this okay??)
@@ -16,7 +16,7 @@ def findPeaks(data, offset, start_WT, end_WT, thres=0, sampleRate=SAMPLE_RATE):
                     the derivative must be negative after a peak.
         start_WT:    maximum number of seconds before the apex of a peak that is the "start" of the peak
         end_WT:      maximum number of seconds after the apex of a peak that is the "rec.t/2" of the peak, 50% of amp
-        thres:       the minimum uS change required to register as a peak, defaults as 0 (i.e. all peaks count)
+        thresh:       the minimum uS change required to register as a peak, defaults as 0 (i.e. all peaks count)
         sampleRate:  number of samples per second, default=8
 
         ********* OUTPUTS **********
@@ -29,11 +29,8 @@ def findPeaks(data, offset, start_WT, end_WT, thres=0, sampleRate=SAMPLE_RATE):
         max_deriv:           list of floats, max derivative within 1 second of apex of SCR
 
     '''
-    print()
-    EDA_deriv = data['filtered_eda'][1:].values - data['filtered_eda'][:-1].values #il succesivo meno il precedente
+    EDA_deriv = data['filtered_eda'][1:].values - data['filtered_eda'][:-1].values
 
-    print(data.head())
-    print(EDA_deriv)
     peaks = np.zeros(len(EDA_deriv))
     peak_sign = np.sign(EDA_deriv)
     for i in range(int(offset), int(len(EDA_deriv) - offset)):
@@ -76,7 +73,7 @@ def findPeaks(data, offset, start_WT, end_WT, thres=0, sampleRate=SAMPLE_RATE):
                 rise_time[i] = start_WT
 
             # Check if amplitude is too small
-            if thres > 0 and (data['filtered_eda'].iloc[i] - data['filtered_eda'][peak_start_times[i]]) < thres:
+            if thresh > 0 and (data['filtered_eda'].iloc[i] - data['filtered_eda'][peak_start_times[i]]) < thresh:
                 peaks[i] = 0
                 peak_start[i] = 0
                 peak_start_times[i] = ''
@@ -95,7 +92,6 @@ def findPeaks(data, offset, start_WT, end_WT, thres=0, sampleRate=SAMPLE_RATE):
         if peaks[i] == 1:
             peak_amp = data['filtered_eda'].iloc[i]
             start_amp = data['filtered_eda'][peak_start_times[i]]
-            print(data['filtered_eda'].empty)
             amplitude[i] = peak_amp - start_amp
 
             half_amp = amplitude[i] * .5 + start_amp
@@ -105,7 +101,6 @@ def findPeaks(data, offset, start_WT, end_WT, thres=0, sampleRate=SAMPLE_RATE):
             # has to decay within end_WT seconds
             while found == False and find_end < (i + end_WT * sampleRate) and find_end < len(peaks):
                 if data['filtered_eda'].iloc[find_end] < half_amp:
-                    print(data['filtered_eda'].empty)
                     found = True
                     peak_end[find_end] = 1
                     peak_end_times[i] = data.index[find_end]
@@ -116,9 +111,8 @@ def findPeaks(data, offset, start_WT, end_WT, thres=0, sampleRate=SAMPLE_RATE):
                     # Find width
                     find_rise = i
                     found_rise = False
-                    while found_rise == False:
+                    while not found_rise:
                         if data['filtered_eda'].iloc[find_rise] < half_amp:
-                            print(data['filtered_eda'].empty)
                             found_rise = True
                             half_rise[i] = data.index[find_rise]
                             SCR_width[i] = get_seconds_and_microseconds(
@@ -132,10 +126,8 @@ def findPeaks(data, offset, start_WT, end_WT, thres=0, sampleRate=SAMPLE_RATE):
                 find_end = find_end + 1
 
             # If we didn't find an end
-            print(data['filtered_eda'])
             if found == False:
                 min_index = np.argmin(data['filtered_eda'].iloc[i:(i + end_WT * sampleRate)].tolist())
-                print(data['filtered_eda'].empty)
                 peak_end[i + min_index] = 1
                 peak_end_times[i] = data.index[i + min_index]
 

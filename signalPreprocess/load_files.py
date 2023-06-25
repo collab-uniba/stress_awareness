@@ -22,7 +22,6 @@ def _loadSingleFile_E4(data, list_of_columns, expected_sample_rate, freq):
     # Get the startTime and sample rate
     startTime = pd.to_datetime(float(data.columns.values[0]), unit="s")
     sampleRate = float(data.iloc[0][0])
-    print("Sample Rate: ", sampleRate)
     data = data[data.index != 0]
     data.index = data.index - 1
 

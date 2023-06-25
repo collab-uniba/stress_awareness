@@ -1,22 +1,18 @@
-import csv
-import glob
-import os
 import datetime
-import numpy as np
+from datetime import date as dt
+import os
+import re
+import shutil
+from bokeh.models import Span
 import pandas as pd
-import importlib
-import sys
-from bokeh.plotting import figure, show
-from bokeh.models import ColumnDataSource, Span, HoverTool
-from bokeh.layouts import column
-import io
-import zipfile
-sys.path.insert(1, './eda_explorer')
-eda_artifact = importlib.import_module("EDA-Artifact-Detection-Script")
-eda_peak = importlib.import_module("EDA-Peak-Detection-Script")
-SAMPLE_RATE = 8
+from visualization_utils import create_directories_session_popup, create_directories_session_data, get_popup, create_fig_line, read_param_EDA, save_data_filtered
 import panel as pn
-from panel.widgets import FileInput
+import configparser
+from scipy.stats import rankdata
+import shutil
+from tkinter import Tk
+from tkinter.filedialog import askdirectory
+
 
 '''
  Please note that this script use scripts released by Taylor et al. that you can find here: https://github.com/MITMediaLabAffectiveComputing/eda-explorer
@@ -28,203 +24,389 @@ from panel.widgets import FileInput
   doi:10.1109/EMBC.2015.7318762
 
 '''
-numClassifiers = 1
-classifierList = ['Binary']
-artifact_output_path = r"./temp"
-file_upload = FileInput()
-thresh = pn.widgets.TextInput(name='Peak width', placeholder='default .02', value='.02')
-offset = pn.widgets.TextInput(name='Peak start time', placeholder='default 1', value='1')
-start_WT = pn.widgets.TextInput(name='Peak end time', placeholder='default 4', value='4')
-end_WT = pn.widgets.TextInput(name='Minimum peak amplitude', placeholder='default 4', value='4')
-
-bokeh_pane = pn.pane.Bokeh()
-
-def classify_artifacts(classifierList, eda, acc,temp, fullOutputPath, ouput_path):
-    labels, data = eda_artifact.classify(classifierList, eda, acc, temp)
-
-    featureLabels = pd.DataFrame(labels, index=pd.date_range(start=data.index[0], periods=len(labels), freq='5s'),
-                                 columns=classifierList)
-    featureLabels.reset_index(inplace=True)
-    featureLabels.rename(columns={'index': 'StartTime'}, inplace=True)
-    featureLabels['EndTime'] = featureLabels['StartTime'] + datetime.timedelta(seconds=5)
-    featureLabels.index.name = 'EpochNum'
-    cols = ['StartTime', 'EndTime']
-    cols.extend(classifierList)
-    featureLabels = featureLabels[cols]
-    featureLabels.rename(columns={'Binary': 'BinaryLabels', 'Multiclass': 'MulticlassLabels'},
-                         inplace=True)
-    featureLabels.to_csv(fullOutputPath)
-    data.to_csv(ouput_path)
 
 
-def detect_peak(ouput_path, artifact_path, thresh, offset, start_WT, end_WT):
-    signal_df = pd.read_csv(ouput_path,  names = ['timestamp', 'EDA', 'filtered_eda', 'AccelX', 'AccelY', 'AccelZ', 'Temp'])
-    artifact_df = pd.read_csv(artifact_path)
-    signal_df['timestamp'] = signal_df['timestamp'].astype('datetime64[ns]')
-    artifact_df['StartTime'] = artifact_df['StartTime'].astype('datetime64[ns]')
-    eda_clean = pd.merge(signal_df, artifact_df, how = 'outer', left_on='timestamp', right_on='StartTime')
-    eda_clean = eda_clean.fillna(method = 'ffill')
-    x = eda_clean['filtered_eda'].values
-    dx = eda_clean['BinaryLabels']
-    filt = [np.nan if t == -1.0 else y for y,t in zip(x,dx)]
-    eda_clean['filtered_eda'] = filt
-    eda_clean['filtered_eda'] = eda_clean['filtered_eda'].ffill()
-    eda_clean = eda_clean[~eda_clean['filtered_eda'].isin(['filtered_eda'])]
-    final_df = eda_clean[['timestamp', 'filtered_eda']]
-    final_df.to_csv(r"./eda_explorer/temp" + '/filtered_eda.csv', index = False)
-    path_to_E4 = r"./eda_explorer/temp" + "/filtered_eda.csv"
-    data = pd.read_csv(path_to_E4)
-    data.index = data['timestamp']
-    data.index = pd.to_datetime(data.index.values)
-    fullOutputPath = r"./eda_explorer/temp" + "/result_peak.csv"
+bokeh_pane_eda = pn.pane.Bokeh(visible=False, sizing_mode='stretch_both')
+bokeh_pane_hr = pn.pane.Bokeh(visible=False, sizing_mode='stretch_both')
+bokeh_pane_acc = pn.pane.Bokeh(visible=False, sizing_mode='stretch_both')
 
-    return eda_peak.calcPeakFeatures(
-        data, fullOutputPath, float(offset.value), float(thresh.value), int(start_WT.value), int(end_WT.value)
-    )
+text_title_student = pn.widgets.StaticText()
+text_title_day = pn.widgets.StaticText()
+text_title_session = pn.widgets.StaticText()
 
+selected_path_directory = None
 
-def get_datetime_filename(column):
-    human_timestamp = []
-    for value in column:
-        human_date = datetime.datetime.fromtimestamp(int(value))
-        human_timestamp.append(human_date)
-    return human_timestamp
+#Selezione della directory
+dir_input_btn = pn.widgets.Button(name="Select Data Directory", button_type='primary', sizing_mode='stretch_width', height=50)
+dir_input_btn.on_click(lambda x: select_directory())
 
-def uniform_csv(filename):
-    # Read in the file
-    with open(filename, 'r') as file:
-      filedata = file.read()
-    # Replace the target string
-    filedata = filedata.replace(';', ',')
-    filedata = filedata.replace('Timestamp,Activity,Valence,Arousal,Dominance,Progress,Status,Notes', '')
-    #print(filedata)
-    # Write the file out again
-    with open(filename, 'w') as file:
-      file.write(filedata)
+file_name_student = None
+current_session = None #Timestamp della sessione scelta
+path_student = None #Path dello studente
+path_days = None    #Path dei giorni di lavoro dello studente
+path_sessions = None #Path delle sessioni di un giorno di lavoro
+sessions = [] # Lista dei timestamp delle sessioni
 
-
-def popup_process():
-    #read all file in a specific folder
-    path = r"./temp"
-    all_files = glob.glob(f"{path}/*data*.csv")
-    li = []
-    for filename in all_files:
-        df = pd.read_csv(filename, index_col=None, names=['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity', 'status_popup','notes'])
-
-        li.append(df)
-    frame = pd.concat(li, axis=0, ignore_index=True)
-    # delete duplicate rows
-    frame = frame.drop_duplicates()
-    first_column = frame['timestamp']
-    frame['timestamp'] = get_datetime_filename(first_column)
-    print(frame['arousal'])
-    frame.loc[(frame['valence'] == 4.0) | (frame['valence'] == 5.0) & (frame['arousal'] == 1.0) | (frame['arousal'] == 2.0), 'arousal'] = 'Low 😔'
-    frame.loc[(frame['valence'] == 4.0) | (frame['valence'] == 5.0) & (frame['arousal'] == 4.0) | (frame['arousal'] == 5.0), 'arousal'] = 'High 🤩'
-    frame.loc[(frame['valence'] == 1.0) | (frame['valence'] == 2.0) & (frame['arousal'] == 4.0) | (frame['arousal'] == 5.0), 'arousal'] = 'High 😤'
-    frame.loc[(frame['valence'] == 1.0) | (frame['valence'] == 2.0) & (frame['arousal'] == 1.0) | (frame['arousal'] == 2.0), 'arousal'] = 'Low 🧘‍♀'
-    frame.loc[(frame['arousal'] == 3.0), 'arousal'] = 'Medium 😐'
-    convert_to_discrete(frame, 'valence')
-    convert_to_discrete(frame, 'dominance')
-    convert_to_discrete(frame, 'productivity')
-    return frame
-
-
-def convert_to_discrete(frame, arg1):
-    # rename the value of the column "valence" where the value is 0 or 1 to "low" and 2 to "medium" and 3 or 4 to "high"
-    frame[arg1] = frame[arg1].replace([3.0], 'Medium 😐')
-    if arg1 == 'valence':
-        frame[arg1] = frame[arg1].replace([1.0, 2.0], 'Low 😔')
-        frame[arg1] = frame[arg1].replace([4.0, 5.0], 'High 😄')
-    elif arg1 == 'dominance':
-        frame[arg1] = frame[arg1].replace([1.0, 2.0], 'Low 😔🥱')
-        frame[arg1] = frame[arg1].replace([4.0, 5.0], 'High 👨‍🎓')
-
-
-def process(EDA, ACC, TEMP, popup):
-
-    artifact_file = os.path.join(artifact_output_path, "artifact_detected.csv")
-    ouput_path = os.path.join(artifact_output_path, "result.csv")
-    classify_artifacts(classifierList, EDA, ACC, TEMP, artifact_file, ouput_path)
-    data = detect_peak(ouput_path, artifact_file, thresh, offset, start_WT, end_WT)
-    print(data['filtered_eda'].empty)
-    data['timestamp'] = pd.to_datetime(data.index.values, utc=True).tz_convert('Europe/Berlin')
-    data['timestamp'] = data['timestamp'] + data['timestamp'].apply(lambda x: x.utcoffset())
-    popup['timestamp'] = pd.to_datetime(popup['timestamp'], utc=True)
-    data['hours'] = data['timestamp'].dt.hour
-    popup['hours'] = popup['timestamp'].dt.hour
-    print(popup)
-    df_merged = pd.merge(popup, data, on='timestamp', how='outer')
-    df_merged['timestamp'] = pd.to_datetime(df_merged['timestamp'].values, utc=True)
-    df_merged = df_merged.sort_values(by='timestamp')
-    df_merged.to_csv('./temp/merged.csv')
-    print(data['filtered_eda'].empty)
-    df_popup = df_merged[
-        ['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity', 'notes', 'filtered_eda']]
-    # drop the row if the column activity is nan
-    df_popup = df_popup[df_popup['activity'].notna()]
-    # plot df_popup in another fig
-    datasrc = ColumnDataSource(df_popup)
-    fig = figure(x_axis_type='datetime', plot_width=1500, plot_height=400,
-                 title='EDA with Peaks marked as vertical lines', x_axis_label='Time', y_axis_label='μS',
-                 sizing_mode='stretch_both')
-
-    # Define the data source
-    data_src = ColumnDataSource(df_merged)
-
-    line_plot = fig.line(x='timestamp', y='filtered_eda', source=data_src)
-    circle_plot = fig.circle(name='report', x='timestamp', y='filtered_eda', source=datasrc, fill_color="yellow",
-                             size=9)
-
-    line_hover = HoverTool(renderers=[line_plot],
-                           tooltips=[("EDA", "@filtered_eda"), ("Timestamp", "@timestamp{%F}")],
-                           formatters={'@timestamp': 'datetime'})
-    circle_hover = HoverTool(renderers=[circle_plot],
-                             tooltips=[("Activity", "@activity"), ("Valence", "@valence"), ("Arousal", "@arousal"),
-                                       ("Dominance", "@dominance"), ("Productivity", "@productivity"),
-                                       ("Notes", "@notes"), ("Timestamp", "@timestamp{%F}")],
-                             formatters={'@timestamp': 'datetime'})
-    fig.add_tools(line_hover, circle_hover)
-
-    # Add the peak markers to the figure
-    peak_height = data['filtered_eda'].max() * 1.15
-    df_merged['peaks_plot'] = df_merged['peaks'] * peak_height
-    df_peak = df_merged[['timestamp', 'peaks_plot', 'arousal']].set_index('timestamp')
-    df_peak = df_peak.fillna(method='backfill').fillna(method='ffill').loc[~(df_peak['peaks_plot'] == 0)]
-    for t, a in df_peak.iterrows():
-        if a['arousal'] == 'Low':
-            color = '#4DBD33'
-        elif a['arousal'] == 'Medium':
-            color = '#FF8C00'
-        else:
-            color = '#FF0000'
-        fig.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
-
-    bokeh_pane.object = fig
-
-
-def file_upload_handler(event):
-    # Get the uploaded file
-    file = event.new
-    buffer = io.BytesIO(file)
-    with zipfile.ZipFile(buffer) as zip_file:
-        zip_file.extractall('./temp')
-
-
-def start_process(event):
-    EDA_df = pd.read_csv('./temp/EDA.csv')
-    ACC_df = pd.read_csv('./temp/ACC.csv')
-    TEMP_df = pd.read_csv('./temp/TEMP.csv')
-    popup_df = popup_process()
-    process(EDA_df, ACC_df, TEMP_df, popup_df)
-
-button = pn.widgets.Button(name='Start Process', button_type='primary')
-button.on_click(start_process)
-fig = file_upload.param.watch(file_upload_handler, 'value')
-# Create a Panel layout for the dashboard
-
-params_row = pn.Row(offset, thresh, start_WT, end_WT)
-layout = pn.Column("# Upload the Zip file of Empatica E4", file_upload,params_row, button, bokeh_pane, sizing_mode='stretch_both')
 pn.extension()
-layout.show()
+
+config_data = configparser.ConfigParser()
+config_data.read("config.ini")
+plot = config_data["PLOT"]
 
 
+
+
+
+
+
+
+
+
+
+def select_directory():
+    #Questo metodo permette di selezionare la cartella
+    global selected_path_directory
+    global text_title_student
+    
+    root = Tk()
+    root.attributes('-topmost', True)
+    root.withdraw()
+    dirname = askdirectory()
+    if dirname:
+        selected_path_directory = dirname
+
+    prepare_files(selected_path_directory)
+    
+    global file_name_student
+    text_title_student.value = 'Directory ' + file_name_student + ' selected'
+    dir_input_btn.background = '#00A170'
+
+    dir_input_btn.aspect_ratio
+
+    reset_widgets()
+    
+    
+    
+
+def reset_widgets():
+    global button_visualize
+    global bokeh_pane_eda, bokeh_pane_acc, bokeh_pane_hr
+    global select
+    button_visualize.disabled = True
+    bokeh_pane_eda.visible = False
+    bokeh_pane_acc.visible = False
+    bokeh_pane_hr.visible = False
+    
+    global text_title_day, text_title_session
+    text_title_day.value = ''
+    text_title_session.value = ''
+
+    select.disabled = True
+
+    
+
+
+def prepare_files(path):
+    #Questo metodo copia e prepara i file nella cartella temp
+    global file_name_student
+    #Get file directory
+    file_name_student = os.path.basename(path)
+
+    path_student = './temp/' + file_name_student
+
+    global path_days
+    path_days = path_student + '/Sessions'
+
+    #Se esiste già la cartella in temp, la elimino
+    if os.path.exists('./temp/'):
+        # Delete Folders
+        shutil.rmtree('./temp/')
+
+    os.mkdir('./temp/')
+    os.mkdir(path_student)
+    
+    shutil.copytree(path + '/Data', path_student + '/Data')
+    shutil.copytree(path + '/Popup', path_student + '/Popup')
+    
+    create_directories_session_data(path_student)
+    create_directories_session_popup(path_student)
+
+    button_analyse.disabled = False
+
+
+
+def visualize_session(date, session):
+    global bokeh_pane_acc
+    global bokeh_pane_eda
+    global bokeh_pane_hr
+    global progress_bar
+
+    global plot
+    
+    
+
+    
+    #Check for missing signals in config
+    signals = ['EDA', 'HR', 'ACC']
+    for s in signals:
+        if s not in plot.keys():
+            plot[s] = '0'
+
+    path_session = './temp/' + file_name_student + '/Sessions/' + date + '/' + session
+    
+    #x_range serve per muovere i grafici insieme sull'asse x
+    x_range = None
+    popup = None
+    if os.path.exists(path_session + '/Popup'):
+        popup = get_popup(path_session , date)
+    
+    
+    
+    #EDA
+    if int(plot['EDA']) == 1:
+        bokeh_pane_eda.visible = True
+
+        data = pd.read_csv(path_session + '/Data/data_eda_filtered.csv')
+        
+        data['time'] = pd.to_datetime(data['timestamp'])
+        data['time']=data['time'].values.astype('datetime64[s]')
+        data['time']=data['time'].dt.tz_localize('UTC').dt.tz_convert('Europe/Berlin')
+        data['time']=data['time'].dt.tz_localize(None)
+
+        data = data[['time', 'filtered_eda', 'peaks']]
+        
+        fig_eda = create_fig_line(data, 'time', 'filtered_eda', 'Electrodermal Activity', 'μS', 'EDA', popup)
+        
+        # Add the peak markers to the figure
+        peak_height = data['filtered_eda'].max() * 1.15
+        data['peaks_plot'] = data['peaks'] * peak_height
+        time_peaks = data[data['peaks_plot'] != 0]['time']
+    
+        if popup is not None:
+            temp = popup.copy()
+            temp['time']= temp['time'].astype(str)
+            temp['time'] = pd.to_datetime(temp['time'], format='%H:%M:%S').dt.time
+            for t in time_peaks:
+                #Considero solo i popup fatti prima del picco
+                prev_popup = temp[temp['time'] < t.time()]
+                
+                #Assegnazione arousal
+                arousal = None
+                #Considero solo i popup fatti nei precedenti 30 minuti
+                if not prev_popup.empty:
+                    #Considero l'ultimo popup fatto nei precedenti 30 minuti
+                    prev_popup = prev_popup.sort_values(by=['time'], ascending=False)
+                    prev_popup.reset_index(inplace=True, drop=True)
+                    flag = datetime.datetime.combine(dt.today(), t.time()) - datetime.datetime.combine(dt.today(), prev_popup.loc[0, 'time']) < datetime.timedelta(minutes=30)
+                    if flag:
+                        arousal = prev_popup.loc[0, 'arousal']
+
+                if arousal is None:
+                    color = '#808080' #Grigio
+                elif arousal == 'Low 😔':
+                    color = '#4DBD33' #Verde
+                elif arousal == 'Medium 😐':
+                    color = '#FF8C00' #Arancione
+                else:
+                    color = '#FF0000' #Rosso
+
+                fig_eda.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
+            
+        if x_range is None:
+            x_range = fig_eda.x_range
+            
+        fig_eda.x_range = x_range
+        bokeh_pane_eda.object = fig_eda
+    
+    
+    
+
+    
+    #ACC
+    if int(plot['ACC']) == 1:
+        
+        bokeh_pane_acc.visible = True
+        df_acc = pd.read_csv(path_session + '/Data/df_data_acc_filtered.csv')
+       
+        df_acc['time'] = pd.to_datetime(df_acc['timestamp'])
+        df_acc['time']=df_acc['time'].values.astype('datetime64[s]')
+
+        df_acc = df_acc[['time', 'acc_filter']]
+        
+
+        fig_acc = create_fig_line(df_acc, 'time', 'acc_filter', 'Movement', 'Variation', 'MOV', popup)
+        
+        if x_range is None:
+            x_range = fig_acc.x_range
+        
+        fig_acc.x_range = x_range
+        
+        bokeh_pane_acc.object = fig_acc
+    
+    #HR
+    if int(plot['HR']) == 1:
+        bokeh_pane_hr.visible = True
+        df_hr = pd.read_csv(path_session + '/Data/df_data_hr_filtered.csv')
+        df_hr['time'] = pd.to_datetime(df_hr['timestamp'])
+        df_hr['time']=df_hr['time'].values.astype('datetime64[s]')
+    
+        df_hr = df_hr[['time', 'hr']]
+
+        fig_hr = create_fig_line(df_hr, 'time', 'hr', 'Heart Rate', 'BPM', 'HR', popup)
+        if x_range is None:
+            x_range = fig_hr.x_range
+        
+        fig_hr.x_range = x_range
+        
+        bokeh_pane_hr.object = fig_hr
+    
+    progress_bar.visible = False
+
+    print('Fine')
+
+
+def prepare_sessions(event):
+    #Questo metodo ricava il giorno e la sessione dal valore della select
+    global progress_bar
+    progress_bar.visible = True
+    
+    global select
+    groups = select.groups
+    session = select.value
+    
+    day = None
+
+    #Ricavare il giorno dalla stringa "Session #: HH:MM:SS"
+    for key, values in groups.items():
+        if str(session) in values:
+            day = key
+            break
+    
+    global path_sessions
+    path_sessions = path_days +'/' + day
+
+    global sessions
+    sessions = os.listdir(path_sessions)
+
+    #Esempio di session: 'Session 2: 12:13:49'
+    num_session = int(re.search(r'\d+', session).group())
+
+    global current_session
+    current_session = num_session_to_timestamp(num_session)
+ 
+    global text_title_day, text_title_student
+    text_title_day.value = 'Day: ' + day
+    text_title_session.value = session
+    
+    visualize_session(day, current_session)
+    
+
+def num_session_to_timestamp(num_session):
+    global sessions
+    sorted_list = sorted(sessions)
+
+    return sorted_list[num_session-1]
+
+def create_select_sessions(event):
+    offset, thresh, start_WT, end_WT = read_param_EDA()
+
+    global button_analyse
+    global dir_input_btn
+
+    #Disattivo i bottoni
+    dir_input_btn.disabled = True
+    button_analyse.disabled = True
+
+    #Questo metodo converte i timestamp delle sessioni nella stringa "Session #: HH:MM:SS"
+    global path_days
+    days = os.listdir(path_days)
+    
+    # Dizionario con key: giorno    value: lista di stringhe "Session #: HH:MM:SS"
+    groups = {}
+    for d in days:
+        sessions = os.listdir(path_days + '/' + str(d))
+        #Converto i timestamp delle sessioni in numero della sessione nella giornata
+        dt_objects_list = [datetime.datetime.fromtimestamp(int(t)) for t in sessions]
+        dt_objects_list = [datetime.datetime.strftime(t, '%H:%M:%S') for t in dt_objects_list]
+        
+        num_sessions = rankdata(sessions).astype(int)
+        string_sessions = ['Session ' + str(n) + ': ' + s for n, s in zip(num_sessions, dt_objects_list)]
+        
+        groups[d] = string_sessions
+    
+    global select
+    select.groups = groups
+
+    global text_title_student
+    text_title_student.value = 'Analysing ' + file_name_student
+    save_data_filtered(path_days, thresh, offset, start_WT, end_WT)
+
+    #Visualizza la prima sessione
+    prepare_sessions(event)
+
+    dir_input_btn.disabled = False
+    button_analyse.disabled = False
+    select.disabled = False
+    button_visualize.disabled = False
+
+
+#######                 #######
+#######                 #######
+#######     WIDGET      #######
+#######                 #######
+#######                 #######
+
+#Button per confermare lo studente
+button_analyse = pn.widgets.Button(name='Analyse biometrics', button_type='primary', disabled = True, sizing_mode='stretch_width')
+button_analyse.on_click(create_select_sessions)
+
+#Progress Bar
+progress_bar = pn.indicators.Progress(name = 'Progress', visible=False, active=True, sizing_mode='stretch_width')
+
+#Selezione della sessione
+select = pn.widgets.Select(name='Select Session', options=sessions, disabled = True, sizing_mode='stretch_width')
+
+
+#Button per visualizzare la sessione
+button_visualize = pn.widgets.Button(name='Visualize session', button_type='primary', disabled = True, sizing_mode='stretch_width')
+button_visualize.on_click(prepare_sessions)
+
+
+#Template
+template = pn.template.FastGridTemplate(
+    title = 'EmoVizPhy',
+    sidebar=[dir_input_btn, 
+             button_analyse,
+             select, 
+             button_visualize, 
+             progress_bar],
+    theme_toggle = False,
+)
+
+
+
+#Header
+title = pn.Row(pn.layout.HSpacer(), text_title_student, text_title_day, text_title_session)  
+template.header.append(title)
+
+#Main
+#Il  numero di panel mostrati è uguale al numero di segnali da mostrare. Se ad esempio, nel file config EDA è 
+#disattivato, allora bisogna rimuovere il suo panel
+show_bokeh_pane = []
+if int(plot['EDA']) == 1:
+    show_bokeh_pane.append(bokeh_pane_eda)
+if int(plot['HR']) == 1:
+    show_bokeh_pane.append(bokeh_pane_hr)
+if int(plot['ACC']) == 1:
+    show_bokeh_pane.append(bokeh_pane_acc)
+
+size = 2
+for i in range(len(show_bokeh_pane)):
+    #12 è il massimo
+    template.main[(i*size):(i*size)+size, :] = show_bokeh_pane[i]
+
+
+
+print("Reach the application at http://localhost:20000")
+template.show()
+#template.show(port = 20000)

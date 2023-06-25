@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import pywt
 
 
-from load_files import getInputLoadFile, get_user_input
-from ArtifactClassifiers import predict_binary_classifier, predict_multiclass_classifier
+from signalPreprocess.load_files import getInputLoadFile
+from signalPreprocess.ArtifactClassifiers import predict_binary_classifier, predict_multiclass_classifier
 
 matplotlib.rcParams['ps.useafm'] = True
 matplotlib.rcParams['pdf.use14corefonts'] = True

@@ -204,7 +204,7 @@ def visualize_session(date, session):
                     
             if arousal is None:
                 color = '#808080' #Grigio
-            elif arousal == 'Low 😔':
+            elif arousal == 'Low 🧘‍♀' or arousal == 'Low 😔':
                 color = '#4DBD33' #Verde
             elif arousal == 'Medium 😐':
                 color = '#FF8C00' #Arancione

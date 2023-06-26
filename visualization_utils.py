@@ -284,7 +284,7 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
         
         #Sostituzione dei valori nulli nelle note con stringa vuota. Necessario per la visualizzazione sull'HoverTool
         df_popup_copy['notes'] = df_popup_copy['notes'].astype(str)
-        df_popup_copy['notes'] = df_popup_copy[df_popup_copy['notes'] == 'nan'] = ''
+        df_popup_copy.loc[df_popup_copy["notes"] == 'nan', 'notes'] = ''
         
         datasrc = ColumnDataSource(df_popup_copy)
         circle_plot = fig_sign.circle(name='report', x=x, y=y, source=datasrc, fill_color="yellow",

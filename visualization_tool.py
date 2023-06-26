@@ -186,12 +186,13 @@ def visualize_session(date, session):
             temp = popup.copy()
             temp['time']= temp['time'].astype(str)
             temp['time'] = pd.to_datetime(temp['time'], format='%H:%M:%S').dt.time
-            for t in time_peaks:
-                #Considero solo i popup fatti prima del picco
+        for t in time_peaks:
+            #Assegnazione arousal
+            arousal = None
+            #Considero solo i popup fatti prima del picco
+            if popup is not None:
                 prev_popup = temp[temp['time'] < t.time()]
-                
-                #Assegnazione arousal
-                arousal = None
+
                 #Considero solo i popup fatti nei precedenti 30 minuti
                 if not prev_popup.empty:
                     #Considero l'ultimo popup fatto nei precedenti 30 minuti
@@ -200,17 +201,16 @@ def visualize_session(date, session):
                     flag = datetime.datetime.combine(dt.today(), t.time()) - datetime.datetime.combine(dt.today(), prev_popup.loc[0, 'time']) < datetime.timedelta(minutes=30)
                     if flag:
                         arousal = prev_popup.loc[0, 'arousal']
-
-                if arousal is None:
-                    color = '#808080' #Grigio
-                elif arousal == 'Low 😔':
-                    color = '#4DBD33' #Verde
-                elif arousal == 'Medium 😐':
-                    color = '#FF8C00' #Arancione
-                else:
-                    color = '#FF0000' #Rosso
-
-                fig_eda.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
+                    
+            if arousal is None:
+                color = '#808080' #Grigio
+            elif arousal == 'Low 😔':
+                color = '#4DBD33' #Verde
+            elif arousal == 'Medium 😐':
+                color = '#FF8C00' #Arancione
+            else:
+                color = '#FF0000' #Rosso
+            fig_eda.add_layout(Span(location=t, dimension='height', line_color=color, line_alpha=0.5, line_width=1))
             
         if x_range is None:
             x_range = fig_eda.x_range

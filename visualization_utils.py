@@ -363,7 +363,7 @@ def create_directories_session_popup(dir_path):
         all_popup = pd.DataFrame(columns = ['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity',
                                    'status_popup', 'notes'])
         for file in os.listdir(dir_popup):
-            popup = pd.read_csv(dir_popup + '/' + file, header=None)
+            popup = pd.read_csv(dir_popup + '/' + file, header=None, encoding= 'unicode_escape')
             popup.columns = ['timestamp', 'activity', 'valence', 'arousal', 'dominance', 'productivity',
                                    'status_popup', 'notes']
             all_popup = pd.concat([all_popup, popup])

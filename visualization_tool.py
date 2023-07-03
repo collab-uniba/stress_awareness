@@ -13,7 +13,6 @@ import shutil
 from tkinter import Tk
 from tkinter.filedialog import askdirectory
 
-
 '''
  Please note that this script use scripts released by Taylor et al. that you can find here: https://github.com/MITMediaLabAffectiveComputing/eda-explorer
  
@@ -24,8 +23,6 @@ from tkinter.filedialog import askdirectory
   doi:10.1109/EMBC.2015.7318762
 
 '''
-
-
 bokeh_pane_eda = pn.pane.Bokeh(visible=False, sizing_mode='stretch_both')
 bokeh_pane_hr = pn.pane.Bokeh(visible=False, sizing_mode='stretch_both')
 bokeh_pane_acc = pn.pane.Bokeh(visible=False, sizing_mode='stretch_both')
@@ -408,5 +405,5 @@ for i in range(len(show_bokeh_pane)):
 
 
 print("Reach the application at http://localhost:20000")
-template.show()
-#template.show(port = 20000)
+#template.show()
+template.show(port = 20000)

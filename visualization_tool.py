@@ -163,13 +163,6 @@ def visualize_session(date, session):
     popup = None
     if os.path.exists(path_session + "/Popup"):
         popup = get_popup(path_session, date)
-        if popup is not None:
-            popup["time"] = popup["time"].astype(str)
-            popup["time"] = pd.to_datetime(popup["time"], format="%H:%M:%S")
-            popup["time"] = popup["time"].dt.tz_localize("UTC").dt.tz_convert("Europe/Berlin")
-            popup["time"] = popup["time"].dt.tz_localize(None)
-            popup["time"] = popup["time"].dt.time
-
 
     # EDA
     if int(plot["EDA"]) == 1:
@@ -202,7 +195,12 @@ def visualize_session(date, session):
             arousal = None
             # Considero solo i popup fatti prima del picco
             if popup is not None:
-                prev_popup = popup[popup["time"] < t.time()]
+                print(f"\n\nT.TIME: {t.time()}")
+                print(f"\n\nT.TIME (str): {str(t.time())}")
+                print(f"\n\nT.TIME (repr): {repr(t.time())}")
+
+                prev_popup = popup[popup["time"].dt.time < t.time()]
+                prev_popup["time"] = prev_popup["time"].dt.time
 
                 # Considero solo i popup fatti nei precedenti 30 minuti
                 if not prev_popup.empty:

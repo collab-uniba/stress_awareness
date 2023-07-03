@@ -124,10 +124,25 @@ def convert_to_discrete(frame, column):
 
 
 def get_popup(path_session, date):
+
     popup_df = popup_process(path_session + '/Popup/' + 'popup.csv')
     popup = extract_popup_date(popup_df, date)
-    popup['time'] = pd.to_datetime(popup['timestamp'], utc=True)
-    popup['time'] = popup['time'].apply(lambda x: x.time())
+
+    print("\n\nPOPUP NOTE")
+    print(popup["notes"])
+
+    # print("\n\nRAW TIMESTAMP")
+    # print(popup['timestamp'])
+
+    popup['time'] = pd.to_datetime(popup['timestamp'])
+    # print("\n\nPARSED TIMESTAMP")
+    # print(popup['time'])
+
+    popup["time"] = popup["time"].dt.tz_localize("UTC").dt.tz_convert("Europe/Berlin")
+    # print("\n\nPARSED TIMESTAMP (localized)")
+    # print(popup['time'])
+
+    # popup['time'] = popup['time'].apply(lambda x: x.time())
     return popup
 
 
@@ -265,16 +280,24 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
 
 
     if df_popup is not None:
-        print(df_popup)
         # Il seguente controllo è necessario per assegnare ai popup dei timestamp esistenti nei segnali (per la visualizzazione)
         # Assegno i valori dei segnali ai popup nei relativi timestamp
         df_temp = df_sign.copy()
-        print(df_temp)
+        print("DF TEMP (pre-ciclo)")
+        print(df_temp.head())
+        # Print type of dataframe column "time"
+        print(type(df_temp['time'][0]))
+
         df_popup_copy = df_popup.copy()
+        print("DF POPUP COPY (pre-ciclo)")
+        print(df_popup_copy.head())
+        print(type(df_popup_copy['time'][0]))
+
         #Assegnazione dei valori y ai popup
         df_popup_copy[y] = None
+        df_popup_copy["time"] = df_popup_copy["time"].dt.tz_localize(None)
         for i in range(df_popup_copy.shape[0]):
-            time = df_popup_copy.loc[i,'timestamp']
+            time = df_popup_copy.loc[i,'time']
             temp = df_temp[df_temp[x] == time]
             if not temp.empty:
                 temp.reset_index(inplace=True, drop=True)
@@ -282,16 +305,17 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
                 # Assegno il valore del segnale
                 df_popup_copy.loc[i, y] = temp.loc[0,y]
                 # Assegno il valore del timestamp
-                df_popup_copy.loc[i, x] = temp.loc[0,x]
+                # df_popup_copy.loc[i, x] = temp.loc[0,x]
 
         #Se ci sono popup con time che non sono presenti nei segnali, non vengono considerati
         df_popup_copy = df_popup_copy[df_popup_copy[y].notna()]
+        print("DF POPUP COPY")
+        print(df_popup_copy.head())
 
         #Sostituzione dei valori nulli nelle note con stringa vuota. Necessario per la visualizzazione sull'HoverTool
         df_popup_copy['notes'] = df_popup_copy['notes'].astype(str)
         df_popup_copy.loc[df_popup_copy["notes"] == 'nan', 'notes'] = ''
 
-        print(df_popup_copy)
 
         datasrc = ColumnDataSource(df_popup_copy)
         circle_plot = fig_sign.circle(name='report', x=x, y=y, source=datasrc, fill_color="yellow",

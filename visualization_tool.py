@@ -1,3 +1,14 @@
+"""
+ Please note that this script uses scripts released by Taylor et al.
+ that you can find here: https://github.com/MITMediaLabAffectiveComputing/eda-explorer
+
+  Taylor, Sara et al. “Automatic identification of artifacts in electrodermal activity data.”
+  Annual International Conference of the IEEE Engineering in Medicine and Biology Society.
+  IEEE Engineering in Medicine and Biology Society.
+  Annual International Conference vol. 2015 (2015): 1934-7.
+  doi:10.1109/EMBC.2015.7318762
+"""
+
 import configparser
 import datetime
 import os
@@ -16,48 +27,34 @@ from visualization_utils import (create_directories_session_data,
                                  create_fig_line, get_popup, read_param_EDA,
                                  save_data_filtered)
 
-# from tkinter import Tk
-# from tkinter.filedialog import askdirectory
+# ================================ #
+# Definition of panels and widgets #
+# ================================ #
 
-
-
-"""
- Please note that this script use scripts released by Taylor et al. that you can find here: https://github.com/MITMediaLabAffectiveComputing/eda-explorer
-
-  Taylor, Sara et al. “Automatic identification of artifacts in electrodermal activity data.”
-  Annual International Conference of the IEEE Engineering in Medicine and Biology Society.
-  IEEE Engineering in Medicine and Biology Society.
-  Annual International Conference vol. 2015 (2015): 1934-7.
-  doi:10.1109/EMBC.2015.7318762
-
-"""
-
-
+# Bokeh panels for eda, hr, and acc
 bokeh_pane_eda = pn.pane.Bokeh(visible=False, sizing_mode="stretch_both")
 bokeh_pane_hr = pn.pane.Bokeh(visible=False, sizing_mode="stretch_both")
 bokeh_pane_acc = pn.pane.Bokeh(visible=False, sizing_mode="stretch_both")
 
+# Panel widgets
 text_title_student = pn.widgets.StaticText()
 text_title_day = pn.widgets.StaticText()
 text_title_session = pn.widgets.StaticText()
 
-selected_path_directory = None
-
 
 # Selezione della directory
+selected_path_directory = None
 def handle_upload(event):
     dir_input_btn.save('data.zip')
     select_directory()
 
 dir_input_btn = pn.widgets.FileInput(accept='.zip', sizing_mode="stretch_width")
 dir_input_btn.param.watch(handle_upload, 'filename', onlychanged=True)
-# dir_input_btn = pn.widgets.Button(
-#     name="Select Data Directory",
-#     button_type="primary",
-#     sizing_mode="stretch_width",
-#     height=50,
-# )
-# dir_input_btn.on_click(lambda x: select_directory())
+
+
+# ========================================================== #
+# Initialization of global variables and the Panel framework #
+# ========================================================== #
 
 file_name_student = None
 current_session = None  # Timestamp della sessione scelta
@@ -66,23 +63,24 @@ path_days = None  # Path dei giorni di lavoro dello studente
 path_sessions = None  # Path delle sessioni di un giorno di lavoro
 sessions = []  # Lista dei timestamp delle sessioni
 
-pn.extension()
-
+# Read config file
 config_data = configparser.ConfigParser()
 config_data.read("config.ini")
 plot = config_data["PLOT"]
 
+# Initialize Panel
+pn.extension()
+
+
+# ================= #
+# Utility functions #
+# ================= #
 
 def select_directory():
-    print("Entering select_directory")
     # Questo metodo permette di selezionare la cartella
     global selected_path_directory
     global text_title_student
 
-    # root = Tk()
-    # root.attributes("-topmost", True)
-    # root.withdraw()
-    # dirname = askdirectory()
     zipname = "./data.zip"
     dirname = "./data"
     with zipfile.ZipFile(zipname, 'r') as zip_ref:

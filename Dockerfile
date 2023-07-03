@@ -3,10 +3,11 @@ FROM python:3.8
 # RUN git clone https://github.com/collab-uniba/stress_awareness.git
 # RUN git checkout interface
 
+RUN pip install -r requirements.txt
+
 COPY . /stress_awareness
 WORKDIR /stress_awareness
 
-RUN pip install -r requirements.txt
 
 EXPOSE 20000
 

@@ -3,23 +3,23 @@ import datetime
 import os
 import re
 import shutil
+import zipfile
 from datetime import date as dt
-from tkinter import Tk
-from tkinter.filedialog import askdirectory
 
 import pandas as pd
 import panel as pn
 from bokeh.models import Span
 from scipy.stats import rankdata
 
-from visualization_utils import (
-    create_directories_session_data,
-    create_directories_session_popup,
-    create_fig_line,
-    get_popup,
-    read_param_EDA,
-    save_data_filtered,
-)
+from visualization_utils import (create_directories_session_data,
+                                 create_directories_session_popup,
+                                 create_fig_line, get_popup, read_param_EDA,
+                                 save_data_filtered)
+
+# from tkinter import Tk
+# from tkinter.filedialog import askdirectory
+
+
 
 """
  Please note that this script use scripts released by Taylor et al. that you can find here: https://github.com/MITMediaLabAffectiveComputing/eda-explorer
@@ -43,14 +43,21 @@ text_title_session = pn.widgets.StaticText()
 
 selected_path_directory = None
 
+
 # Selezione della directory
-dir_input_btn = pn.widgets.Button(
-    name="Select Data Directory",
-    button_type="primary",
-    sizing_mode="stretch_width",
-    height=50,
-)
-dir_input_btn.on_click(lambda x: select_directory())
+def handle_upload(event):
+    dir_input_btn.save('data.zip')
+    select_directory()
+
+dir_input_btn = pn.widgets.FileInput(accept='.zip', sizing_mode="stretch_width")
+dir_input_btn.param.watch(handle_upload, 'filename', onlychanged=True)
+# dir_input_btn = pn.widgets.Button(
+#     name="Select Data Directory",
+#     button_type="primary",
+#     sizing_mode="stretch_width",
+#     height=50,
+# )
+# dir_input_btn.on_click(lambda x: select_directory())
 
 file_name_student = None
 current_session = None  # Timestamp della sessione scelta
@@ -67,14 +74,19 @@ plot = config_data["PLOT"]
 
 
 def select_directory():
+    print("Entering select_directory")
     # Questo metodo permette di selezionare la cartella
     global selected_path_directory
     global text_title_student
 
-    root = Tk()
-    root.attributes("-topmost", True)
-    root.withdraw()
-    dirname = askdirectory()
+    # root = Tk()
+    # root.attributes("-topmost", True)
+    # root.withdraw()
+    # dirname = askdirectory()
+    zipname = "./data.zip"
+    dirname = "./data"
+    with zipfile.ZipFile(zipname, 'r') as zip_ref:
+        zip_ref.extractall(dirname)
     if dirname:
         selected_path_directory = dirname
 
@@ -87,7 +99,6 @@ def select_directory():
     dir_input_btn.aspect_ratio
 
     reset_widgets()
-
 
 def reset_widgets():
     global button_visualize
@@ -154,6 +165,13 @@ def visualize_session(date, session):
     popup = None
     if os.path.exists(path_session + "/Popup"):
         popup = get_popup(path_session, date)
+        if popup is not None:
+            popup["time"] = popup["time"].astype(str)
+            popup["time"] = pd.to_datetime(popup["time"], format="%H:%M:%S")
+            popup["time"] = popup["time"].dt.tz_localize("UTC").dt.tz_convert("Europe/Berlin")
+            popup["time"] = popup["time"].dt.tz_localize(None)
+            popup["time"] = popup["time"].dt.time
+
 
     # EDA
     if int(plot["EDA"]) == 1:
@@ -177,16 +195,16 @@ def visualize_session(date, session):
         data["peaks_plot"] = data["peaks"] * peak_height
         time_peaks = data[data["peaks_plot"] != 0]["time"]
 
-        if popup is not None:
-            temp = popup.copy()
-            temp["time"] = temp["time"].astype(str)
-            temp["time"] = pd.to_datetime(temp["time"], format="%H:%M:%S").dt.time
+        # if popup is not None:
+        #     temp = popup.copy()
+        #     temp["time"] = temp["time"].astype(str)
+        #     temp["time"] = pd.to_datetime(temp["time"], format="%H:%M:%S").dt.time
         for t in time_peaks:
             # Assegnazione arousal
             arousal = None
             # Considero solo i popup fatti prima del picco
             if popup is not None:
-                prev_popup = temp[temp["time"] < t.time()]
+                prev_popup = popup[popup["time"] < t.time()]
 
                 # Considero solo i popup fatti nei precedenti 30 minuti
                 if not prev_popup.empty:
@@ -235,6 +253,8 @@ def visualize_session(date, session):
 
         df_acc["time"] = pd.to_datetime(df_acc["timestamp"])
         df_acc["time"] = df_acc["time"].values.astype("datetime64[s]")
+        df_acc["time"] = df_acc["time"].dt.tz_localize("UTC").dt.tz_convert("Europe/Berlin")
+        df_acc["time"] = df_acc["time"].dt.tz_localize(None)
 
         df_acc = df_acc[["time", "acc_filter"]]
 
@@ -255,6 +275,8 @@ def visualize_session(date, session):
         df_hr = pd.read_csv(path_session + "/Data/df_data_hr_filtered.csv")
         df_hr["time"] = pd.to_datetime(df_hr["timestamp"])
         df_hr["time"] = df_hr["time"].values.astype("datetime64[s]")
+        df_hr["time"] = df_hr["time"].dt.tz_localize("UTC").dt.tz_convert("Europe/Berlin")
+        df_hr["time"] = df_hr["time"].dt.tz_localize(None)
 
         df_hr = df_hr[["time", "hr"]]
 
@@ -334,10 +356,12 @@ def create_select_sessions(event):
         sessions = os.listdir(path_days + "/" + str(d))
         # Converto i timestamp delle sessioni in numero della sessione nella giornata
         dt_objects_list = [datetime.datetime.fromtimestamp(int(t)) for t in sessions]
+        dt_objects_list = pd.Series(dt_objects_list)
+        dt_objects_list = dt_objects_list.dt.tz_localize("UTC").dt.tz_convert("Europe/Berlin")
+        dt_objects_list = dt_objects_list.dt.tz_localize(None)
         dt_objects_list = [
-            datetime.datetime.strftime(t, "%H:%M:%S") for t in dt_objects_list
+            datetime.datetime.strftime(t, "%H:%M:%S") for t in dt_objects_list.to_list()
         ]
-
         num_sessions = rankdata(sessions).astype(int)
         string_sessions = [
             "Session " + str(n) + ": " + s
@@ -429,6 +453,15 @@ for i in range(len(show_bokeh_pane)):
     template.main[(i * size) : (i * size) + size, :] = show_bokeh_pane[i]
 
 
+
+MAX_SIZE_MB = 1000
+PORT = 20000
+
+app = template
+pn.serve(
+    app,
+    port=PORT,
+    websocket_max_message_size=MAX_SIZE_MB*1024*1014,
+    http_server_kwargs={'max_buffer_size': MAX_SIZE_MB*1024*1014}
+)
 print("Reach the application at http://localhost:20000")
-# template.show()
-template.show(port=20000)

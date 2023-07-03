@@ -1,12 +1,14 @@
-FROM python:3.8-slim-buster
-RUN apt-get update && apt-get install -y git
+FROM python:3.8
+# RUN apt-get update && apt-get install -y git
+# RUN git clone https://github.com/collab-uniba/stress_awareness.git
+# RUN git checkout interface
 
-RUN git clone https://github.com/collab-uniba/stress_awareness.git
+COPY . /stress_awareness
 WORKDIR /stress_awareness
-RUN git checkout interface
 
 RUN pip install -r requirements.txt
 
 EXPOSE 20000
 
-CMD ["python", "visualization_tool.py"]
+ENV DISPLAY=:0
+ENTRYPOINT ["python", "visualization_tool.py"]

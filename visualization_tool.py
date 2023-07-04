@@ -195,9 +195,6 @@ def visualize_session(date, session):
             arousal = None
             # Considero solo i popup fatti prima del picco
             if popup is not None:
-                print(f"\n\nT.TIME: {t.time()}")
-                print(f"\n\nT.TIME (str): {str(t.time())}")
-                print(f"\n\nT.TIME (repr): {repr(t.time())}")
 
                 prev_popup = popup[popup["time"].dt.time < t.time()]
                 prev_popup["time"] = prev_popup["time"].dt.time

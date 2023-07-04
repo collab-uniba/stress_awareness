@@ -5,7 +5,7 @@
 Before using these commands, Docker must be installed on your system.
 If Docker is not yet installed, please follow the instructions provided on the [official Docker website](https://docs.docker.com/get-docker/).
 
-## Setup
+## How to run EmoVizPhy
 
 You must have a text file called `TOKEN.txt` containing
 the access token for the GitHub Docker registry.
@@ -51,3 +51,27 @@ the access token for the GitHub Docker registry.
      ```
 
    This command will run the stressawareness image in a container and provide you with the link to use EmoVizPhy in your browser.
+
+## How to contribute
+
+### How to share a new version of the Docker image
+
+To share a new version of the EmoVizPhy Docker image, you need to have a GitHub account
+with write permissions on the [collab-uniba GitHub organization](https://github.com/collab-uniba).
+
+1. Build a new version of the Docker image using the labels shown in the following example
+   (replace the example tag – i.e., `arm64-latest` – with the desired tag for the new image version):
+
+    ```shell
+    docker build \
+    --label "org.opencontainers.image.source=https://github.com/collab-uniba/stress_awareness" \
+    --label "org.opencontainers.image.description=Visualization tool for biometric data." \
+    --pull --rm -f "Dockerfile" -t ghcr.io/collab-uniba/stressawareness:arm64-latest "."
+    ```
+
+2. Push the newly created image to the GitHub Container Registry
+   (replace the example tag – i.e., `arm64-latest` – with the desired tag for the new image version):
+
+    ```shell
+    docker push ghcr.io/collab-uniba/stressawareness:arm64-latest
+    ```

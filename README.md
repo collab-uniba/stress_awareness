@@ -2,59 +2,60 @@
 
 ## Prerequisites
 
-Before using these commands, Docker must be installed on your system.
-If Docker is not yet installed, please follow the instructions provided on the [official Docker website](https://docs.docker.com/get-docker/).
+EmoVizPhy is distributed as a Docker image on the GitHub Container Registry.
+To download and run the image, you must have Docker installed on your system.
+If you need to install Docker, please refer to the [official guide](https://docs.docker.com/get-docker/).
 
-## How to run EmoVizPhy
+## Getting Started
 
-You must have a text file called `TOKEN.txt` containing
-the access token for the GitHub Docker registry.
+To run EmoVizPhy, first pull the image from the GitHub Container Registry:
 
-1. Open your system's terminal.
-2. Navigate to the directory where the TOKEN.txt file is located.
-3. Run the following command:
+- for Mac computers with Apple Silicon processors (e.g., M1):
 
-   ```shell
-   cat ./TOKEN.txt | docker login ghcr.io -u <USERNAME> --password-stdin
-   ```
+  ```shell
+  docker pull ghcr.io/collab-uniba/stressawareness:arm64-latest
+  ```
 
-   Where `<USERNAME>` should be replaced with your GitHub username.
-   Once the command is executed, you will be successfully authenticated to the remote Docker registry.
+- for Windows computers with 64-bit processors:
 
-4. Run the following command:
-   - for Mac computers with Apple Silicon processors (e.g., M1):
+  ```shell
+  docker pull ghcr.io/collab-uniba/stressawareness:win64-latest
+  ```
 
-     ```shell
-     docker pull ghcr.io/collab-uniba/stressawareness:arm64-latest
-     ```
+Then, run the image in a Docker container:
 
-   - for Windows computers with 64-bit processors:
+- for Mac computers with Apple Silicon processors (e.g., M1):
 
-     ```shell
-     docker pull ghcr.io/collab-uniba/stressawareness:win64-latest
-     ```
+  ```shell
+  docker run --rm -it -p 20000:20000 ghcr.io/collab-uniba/stressawareness:arm64-latest
+  ```
 
-   This command will download the latest version of the stressawareness image from the GitHub Container Registry to your local system.
+- for Windows computers with 64-bit processors:
 
-5. Run the following command:
+  ```shell
+  docker run --rm -it -p 20000:20000 ghcr.io/collab-uniba/stressawareness:win64-latest
+  ```
 
-   - for Mac computers with Apple Silicon processors (e.g., M1):
+Once the container is running, your terminal will display the URL to access the EmoVizPhy web interface:
 
-     ```shell
-     docker run --rm -it -p 20000:20000 ghcr.io/collab-uniba/stressawareness:arm64-latest
-     ```
+```shell
+Launching server at http://localhost:20000
+```
 
-   - for Windows computers with 64-bit processors:
+## Usage
 
-     ```shell
-     docker run --rm -it -p 20000:20000 ghcr.io/collab-uniba/stressawareness:win64-latest
-     ```
+Open the URL in your browser to access the EmoVizPhy web interface.
 
-   This command will run the stressawareness image in a container and provide you with the link to use EmoVizPhy in your browser.
+![EmoVizPhy web interface](assets/imgs/gui-screenshot.png)
 
-## How to contribute
+1. By clicking on the "Select file" button, choose a `.zip` archive on your computer that includes the `Data/` and `Popup/` folders, respectively containing biometric data and popup annotations.
+2. Once it becomes active, click on the "Analyse biometrics" button, then wait for the analysis to complete (this might take a few minutes).
+3. Once the analysis is complete, you can select the session to visualize from the dropdown menu
+4. and click on the "Visualize session" button to populate the dashboard.
 
-### How to share a new version of the Docker image
+## Contributing
+
+### Sharing a new version of the Docker image
 
 To share a new version of the EmoVizPhy Docker image, you need to have a GitHub account
 with write permissions on the [collab-uniba GitHub organization](https://github.com/collab-uniba).

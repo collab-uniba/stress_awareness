@@ -128,8 +128,6 @@ def get_popup(path_session, date):
     popup_df = popup_process(path_session + '/Popup/' + 'popup.csv')
     popup = extract_popup_date(popup_df, date)
 
-    print("\n\nPOPUP NOTE")
-    print(popup["notes"])
 
     # print("\n\nRAW TIMESTAMP")
     # print(popup['timestamp'])
@@ -283,15 +281,8 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
         # Il seguente controllo è necessario per assegnare ai popup dei timestamp esistenti nei segnali (per la visualizzazione)
         # Assegno i valori dei segnali ai popup nei relativi timestamp
         df_temp = df_sign.copy()
-        print("DF TEMP (pre-ciclo)")
-        print(df_temp.head())
-        # Print type of dataframe column "time"
-        print(type(df_temp['time'][0]))
-
         df_popup_copy = df_popup.copy()
-        print("DF POPUP COPY (pre-ciclo)")
-        print(df_popup_copy.head())
-        print(type(df_popup_copy['time'][0]))
+
 
         #Assegnazione dei valori y ai popup
         df_popup_copy[y] = None
@@ -309,8 +300,7 @@ def create_fig_line(df_sign, x, y, title, y_axis_label, sign, df_popup):
 
         #Se ci sono popup con time che non sono presenti nei segnali, non vengono considerati
         df_popup_copy = df_popup_copy[df_popup_copy[y].notna()]
-        print("DF POPUP COPY")
-        print(df_popup_copy.head())
+
 
         #Sostituzione dei valori nulli nelle note con stringa vuota. Necessario per la visualizzazione sull'HoverTool
         df_popup_copy['notes'] = df_popup_copy['notes'].astype(str)
